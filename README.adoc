@@ -1,0 +1,12 @@
+= AWKDoc
+
+Wanted to learn AWK for some time.
+This feels like a good project for that.
+
+== Recognition
+Obvious inspiration, and some outright function theft, from https://github.com/reconquest/shdoc[shdoc].
+
+There were a few edge cases I didn't love, largely surrounding leading whitespace in descriptions.
+
+Doubt I'll ever reach the quality of `shdoc` (including impressive testing suite).
+Though trying my own version, with different approach.

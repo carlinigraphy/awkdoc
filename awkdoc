@@ -1,0 +1,329 @@
+#!/usr/bin/env awk -f
+# vim: ft=awk tw=80 sw=3 ts=3 sts=3
+#
+# It would be trivial to write this in bash. Will likely make a bash version
+# down the line. However I've wanted to learn more "advanced" AWK for a great
+# long while. This is a good project to do so.
+#
+# Attempting something to build documentation from comments. Javadoc style. Not
+# too sure on the format I'm going with. Probably going to mirror very similar
+# functionality from shdoc.
+#
+#-------------------------------------------------------------------------------
+# ref.
+# [0] https://github.com/reconquest/shdoc
+# [1] https://www.math.utah.edu/docs/info/gawk_12.html
+# [2] https://www.gnu.org/software/gawk/manual/html_node/Multidimensional.html
+# [3] https://www.gnu.org/software/gawk/manual/html_node/Arrays-of-Arrays.html
+# [4] https://www.gnu.org/software/gawk/manual/html_node/Variable-Scope.html
+# [5] https://www.math.utah.edu/docs/info/gawk_13.html
+#
+#-------------------------------------------------------------------------------
+# Some notes on things I'd want:
+#
+# @notes       Additional notes about implementation, things to look out for
+# @type        Declare something as a "type", hyperlink other references to
+#              types (in functions and whatnot) to the declared type. Helps
+#              to build a 'map' of where everything is used.
+# @arg         Declares an argument to a function by the name it's referred
+#              to as within the function, and its type.
+# @noarg       Same as shdoc
+# @section     Same as shdoc
+# @see         Same as shdoc
+# @stdin       Same as shdoc
+# @stdout      Same as shdoc
+# @stderr      Same as shdoc
+# @internal    Same as shdoc
+# @does        Same as shdoc's @description
+# @global:r    Global variables READ
+# @global:w    Global variables SET
+# @global:rw   Global variables UPDATE
+#
+# Maybe actually build an html doc, if possible, instead of a .md doc. Still
+# similar to produce, yes easier to open in any browser.
+#
+#-------------------------------------------------------------------------------
+# TODO
+# - [ ] Different output formatters
+#       - [ ] HTML
+#       - [ ] Markdown
+#
+#-------------------------------------------------------------------------------
+
+BEGIN {
+   # Color escapes. For pretty-printing debugging & error information.
+   c["rst"] = "\033[0m"
+   c["rd"]  = "\033[31;1m"
+   c["yl"]  = "\033[33;1m"
+   c["cy"]  = "\033[35m"
+
+   # Convenience variables to make boolean assignments more clear.
+   false = 0
+   true  = 1
+
+   # Upon hitting an error, "panic" until the start of a next valid opt.
+   panicking          = false
+   opts["@notes"]     = true
+   opts["@type"]      = true
+   opts["@arg"]       = true
+   opts["@noarg"]     = true
+   opts["@section"]   = true
+   opts["@see"]       = true
+   opts["@stdin"]     = true
+   opts["@stdout"]    = true
+   opts["@stderr"]    = true
+   opts["@internal"]  = true
+   opts["@does"]      = true
+   opts["@global:r"]  = true
+   opts["@global:w"]  = true
+   opts["@global:rw"] = true
+
+   # Pointer to what we're currently processing. Section, arg, description, etc.
+   processing = ""
+
+   # Buffer for holding multiline strings.
+   buffer = ""
+}
+
+#                               I/O & debugging
+#-------------------------------------------------------------------------------
+function format(text, level) {
+   switch (level) {
+      case "CRIT":   text = c["rd"]  "[CRIT] "  c["rst"] text
+      case "WARN":   text = c["yl"]  "[WARN] "  c["rst"] text
+      case "INFO":   text = c["cy"]  "[INFO] "  c["rst"] text
+      case "DEBUG":  text = c["cy"]  "[DBUG] "  c["rst"] text
+   }
+   return text
+}
+
+
+function log_error(text, level) {
+   text = "ln. "  NR  ", "  text
+   text = format(text, level)
+   push(errors, text)
+}
+
+
+function write(text, level) {
+   print format(text, level) > "/dev/stderr"
+}
+
+
+#                              text manipulation
+#-------------------------------------------------------------------------------
+function lstrip() { sub(/^\s*/, "") }
+function rstrip() { sub(/\s*$/, "") }
+
+# Pops the first word of the current line. Removes preceding whitespace before
+# and after the .pop()
+function pop_word(name) {
+   name = $1
+   sub(/^[[:space:]]*[^[:space:]]*[[:space:]]*/, "")
+   return name
+}
+
+
+function pop_type(type) {
+   # Typedefs must be surrounded by parens.
+   if (! match($1, /\([[:alpha:]_][[:alnum:]_]*\)/)) {
+      panicking = true
+      log_error("arg typedef should be in parentheses.", "WARN")
+      next
+   }
+
+   # Pop first word from stack, remove surrounding parens.
+   type = pop_word()
+   sub(/^\(/, "", type) ; sub(/\)$/, "", type)
+   return type
+}
+
+
+function push(arr, item) {
+    arr[length(arr)+1] = item
+}
+
+#                                  utilities
+#-------------------------------------------------------------------------------
+function set_indentation(spaces,   n) {
+   match($0, /^\s/)
+
+   # $RLENGTH :: length of match above
+   # $spaces  :: initial amount of space
+   #      -1  :: offset for width of `#` char
+   n = (spaces + RLENGTH - 2)
+   indentation = "^#[[:space:]]{" n "}"
+}
+
+
+function flush() {
+   switch (processing) {
+      case "does": build_does()
+   }
+
+   indentation = ""
+   processing  = ""
+   buffer      = ""
+}
+
+#                                 build output
+#-------------------------------------------------------------------------------
+function build_arg(name, type, desc,   out) {
+   name = "<td class='arg_name'>"     name  "</td>\n"
+   type = "<a href=#Types#" type ">"  type  "</a>"
+   type = "<td class='arg_type'>"     type  "</td>\n"
+   desc = "<td class='arg_desc'>"     desc  "</td>\n"
+
+   out = out "<tr class='arg_li'>\n"
+   out = out name type desc
+   out = out "</tr>\n"
+
+   html_args = html_args out
+}
+
+
+function build_does() {
+   html_does = "<div class='does'><p>\n" buffer "\n</p></div>"
+}
+
+
+function build_type() {
+   print
+}
+
+#                                   matches
+#-------------------------------------------------------------------------------
+# This should always be the first match.
+#
+# When hitting an error, start skipping lines until we hit a new synchronization
+# point--a valid @identifier.
+panicking && /^\s*#/ {
+   if (opts[$2]) {
+      panicking = false
+   } else {
+      next
+   }
+}
+
+
+# Test if this line of text should be appended to the current buffer.
+indentation &&
+$0 ~ indentation {
+   sub(indentation, "")
+   buffer = buffer "\n" $0
+   next
+}
+
+
+# Matches:  # @arg
+# Need to use the `match()` function as it sets the `RLENGTH` variable to the
+# length of the matched string. 
+match($0, /^\s*#\s+@arg\s+/) {
+   write("@arg", "DEBUG")
+
+   flush()
+   sub(/^\s*#\s+@arg /, "")
+
+   name = pop_word()
+   type = pop_type()
+   desc = $0
+   build_arg(name, type, desc)
+
+   write("  name: " name, "DEBUG")
+   write("  type: " type, "DEBUG")
+   write("  desc: " desc, "DEBUG")
+   next
+}
+
+
+# Matches:  # @type
+match($0, /^\s*#\s+@type\s+/) {
+   write("@type", "DEBUG")
+   flush()
+   set_indentation(RLENGTH)
+
+   next
+}
+
+
+# Matches:  # @does
+match($0, /^\s*#\s+@does\s+/) {
+   write("@does", "DEBUG")
+   flush()
+
+   # Marks this as "processing" so the $buffer text is applied here.
+   processing = "does"
+
+   sub(/^\s*#\s+@does /, "")
+   set_indentation(RLENGTH)
+
+   lstrip()
+   buffer = $0
+
+   write("  " buffer, "DEBUG")
+   next
+}
+
+
+# This is kinda our "synchronization point" for documenting a function. Upon
+# hitting the actual `function foo()` block (or equivalent), can store all the
+# information related to the function declaration.
+/^\s*function\s+[[:alpha:]_][[:alnum:]_]*\s*(\(\)\s*)?{/ ||
+/^\s*[[:alpha:]_][[:alnum:]_]*\s*\(\)\s*{/ {
+   write("function()", "DEBUG")
+   flush()
+
+   # Match:  function foo { ... }
+   # Match:  function foo() { ... }
+   if (match($0, /^\s*function\s+[[:alpha:]_][[:alnum:]_]*\s*(\(\)\s*)?{/)) {
+      fn_name = $2
+   }
+
+   # Match:  foo() { ... }
+   if (match($0, /^\s*[[:alpha:]_][[:alnum:]_]*\s*\(\)\s*{/)) {
+      fn_name = $1
+   }
+
+   sub(/\(\)/, "", fn_name)      # Remove potential trailing '()'
+   sub(/{/,    "", fn_name)      # Remove potential trailing '{'
+   write("  name: " fn_name, "DEBUG")
+}
+
+
+# Declarations, for defining types.
+/^\s*(declare|local)\s+(-(-|[AagIilnrtux]+))?/ {
+
+}
+/^\s*[[:alpha:]_][[:alnum:]_]*=/ {
+
+}
+
+
+# Start with the most basic here, pulling the data out and putting it somewhere?
+# Functional style seems to be the way to go. `shdoc` does something like:
+#>  toc = concat(toc, html_toc(text))
+
+
+#function html_li() { }
+#function html_ul() { }
+#function html_div() { }
+#function html_header() { }
+
+
+# Reset if hitting a non-comment, or a blank line.
+/^[[:space:]]*[^#]/ || /^[[:space:]]*$/ {
+   flush()
+}
+
+
+END {
+   if (isarray(errors)) {
+      for (idx in errors) {
+         print errors[idx]
+      }
+      exit 1
+   }
+
+   print "<table>\n" html_args "</table>"
+   print html_does
+}
