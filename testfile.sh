@@ -1,9 +1,5 @@
 #!/bin/bash
 
-
-# @type
-
-
 # @arg   something (jeff)  description1 beep boop this is the description
 # @arg   else      (tim)   description2
 #
