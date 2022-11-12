@@ -180,8 +180,13 @@ function build_does() {
 }
 
 
-function build_function(fn_name,   _function) {
-   _args     = "\n<table>" _args "\n</table>"
+function build_function(fn_name,   header, _function) {
+   header    = "\n<th> desc </th>"  header
+   header    = "\n<th> type </th>"  header
+   header    = "\n<th> arg  </th>"  header
+   header    = "\n<tr>"    header       "\n</tr>"
+   _args     = "\n<table>" header _args "\n</table>"
+
    _function = "<h3 class='fn_name'>" fn_name "</h3>"
    _function = _function  _args  _does
    _function = "<div class='fn_block'>\n" _function "\n</div>"
@@ -255,39 +260,38 @@ match($0, /^\s*#\s+@does\s+/) {
 }
 
 
+# Matches:  ^function foo {
+#
 # This is kinda our "synchronization point" for documenting a function. Upon
 # hitting the actual `function foo()` block (or equivalent), can store all the
 # information related to the function declaration.
-/^\s*function\s+[[:alpha:]_][[:alnum:]_]*\s*(\(\)\s*)?{/ ||
-/^\s*[[:alpha:]_][[:alnum:]_]*\s*\(\)\s*{/ {
+/^\s*function\s+[[:alpha:]_][[:alnum:]_]*\s*(\(\)\s*)?\{/ {
    write("function()", "DEBUG")
-
-   # Match:  function foo { ... }
-   # Match:  function foo() { ... }
-   if (match($0, /^\s*function\s+[[:alpha:]_][[:alnum:]_]*\s*(\(\)\s*)?{/)) {
-      fn_name = $2
-   }
-
-   # Match:  foo() { ... }
-   if (match($0, /^\s*[[:alpha:]_][[:alnum:]_]*\s*\(\)\s*{/)) {
-      fn_name = $1
-   }
+   fn_name = $2
 
    sub(/\(\)/, "", fn_name)      # Remove potential trailing '()'
-   sub(/{/,    "", fn_name)      # Remove potential trailing '{'
+   sub(/\{/,   "", fn_name)      # Remove potential trailing '{'
+   write("  name: " fn_name, "DEBUG")
+
+   build_function(fn_name)
+}
+
+# Matches:  ^foo() {
+/^\s*[[:alpha:]_][[:alnum:]_]*\s*\(\)\s*\{/ {
+   write("function()", "DEBUG")
+   fn_name = $1
+
+   sub(/\(\)/, "", fn_name)      # Remove potential trailing '()'
+   sub(/\{/,   "", fn_name)      # Remove potential trailing '{'
    write("  name: " fn_name, "DEBUG")
 
    build_function(fn_name)
 }
 
 
-# Declarations, for defining types.
-/^\s*(declare|local)\s+(-(-|[AagIilnrtux]+))?/ {
-
-}
-/^\s*[[:alpha:]_][[:alnum:]_]*=/ {
-
-}
+# Declarations, for defining types. Synchronization point for @typedef.
+/^\s*(declare|local)\s+(-(-|[AagIilnrtux]+))?/ { }
+/^\s*[[:alpha:]_][[:alnum:]_]*=/ { }
 
 
 # Hitting a line *not* beginning with a comment resets our data/pointers.
@@ -299,7 +303,7 @@ match($0, /^\s*#\s+@does\s+/) {
 END {
    if (isarray(errors)) {
       for (idx in errors) {
-         print errors[idx]
+         print errors[idx] > "/dev/stderr"
       }
       exit 1
    }
