@@ -37,3 +37,50 @@ Should tag each type & function with filename & line number.
 
 === Expanded multiline support
 Ideally everything should allow for multiline descriptions.
+
+
+== Thinkies
+=== Output
+How should generated output look.
+
+[source,html]
+----
+<html>
+<body>
+
+<!-- Table of Contents -->
+<div>
+</div>
+
+<!-- Function documentation -->
+<div>
+<h1> Section __ </h1>
+   <h3> foo() </h3>
+   <table>
+      <!-- @arg -->
+   </table>
+   <p>
+      <!-- @does -->
+   </p>
+
+   <h3> bar() </h3>
+   <!-- etc. -->
+
+<h1> Section __ </h1>
+<!-- etc. -->
+</div>
+
+</body>
+</html>
+----
+
+Hmm.
+
+As I think more about this, maybe it honestly makes more sense to target asciidoc as the output.
+You can compile asciidoc to HTML.
+Allows more expressiveness.
+
+OoooooooooOoooOOOOOh.
+
+What about targetting a man page format?
+I now like this much better.

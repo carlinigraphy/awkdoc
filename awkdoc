@@ -44,9 +44,7 @@
 #
 #-------------------------------------------------------------------------------
 # TODO
-# - [ ] Different output formatters
-#       - [ ] HTML
-#       - [ ] Markdown
+#  - [ ] Create pointer to reference the current section:  `current_section`?
 #
 #-------------------------------------------------------------------------------
 
@@ -191,7 +189,15 @@ function build_function(fn_name,   header, _function) {
    _function = _function  _args  _does
    _function = "<div class='fn_block'>\n" _function "\n</div>"
 
+   # Concatenates this function's documentation with the main docs section of
+   # the currently generated html output.
    html_docs = html_docs _function
+
+   # TODO: add `current_section` or something.
+   #
+   # Concatenates with the current table of contents. Needs to reference
+   # whatever section we're currently processing.
+   #
 }
 
 #                                   matches
