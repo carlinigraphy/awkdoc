@@ -47,6 +47,17 @@
 #  - [ ] Create pointer to reference the current section:  `current_section`?
 #
 #-------------------------------------------------------------------------------
+# THINKIES
+#
+# Iterating line-by-line. Each line is either:
+#  1. A comment beginning with a flag  (@arg, @does, etc.)
+#  2. A synchronization point (non-comment function declaration)
+#  3. Multi-line addition to an immediately previous flag
+#  4. None of the above (non-comment line, empty comment line, regular comment)
+#
+# Effectively, need to determine what category this line falls under. Append it
+# to the string buffer holding that thing (or an array?).
+# Hit synchronization point to build the overall output, unset the mini buffers.
 
 BEGIN {
    # Color escapes. For pretty-printing debugging & error information.
@@ -60,30 +71,9 @@ BEGIN {
    true  = 1
 
    # Upon hitting an error, "panic" until the start of a next valid opt.
-   panicking          = false
-   opts["@notes"]     = true
-   opts["@type"]      = true
-   opts["@arg"]       = true
-   opts["@noarg"]     = true
-   opts["@section"]   = true
-   opts["@see"]       = true
-   opts["@stdin"]     = true
-   opts["@stdout"]    = true
-   opts["@stderr"]    = true
-   opts["@internal"]  = true
-   opts["@does"]      = true
-   opts["@global:r"]  = true
-   opts["@global:w"]  = true
-   opts["@global:rw"] = true
-
-   # Buffer for holding multiline strings.
-   buffer = ""
-
-   # TODO: think more about structure of the output HTML doc. May help to draft
-   #       out how that should look, then model it here.
-   html_toc   = ""
-   html_types = ""
-   html_docs  = ""
+   panicking      = false
+   opts["@arg"]   = true
+   opts["@does"]  = true
 }
 
 #                               I/O & debugging
@@ -146,59 +136,19 @@ function push(arr, item) {
 
 #                                  utilities
 #-------------------------------------------------------------------------------
-function set_indentation(spaces,   n) {
-   match($0, /^\s/)
-   n = (spaces + RLENGTH - 2)
-   indentation = "^#[[:space:]]{" n "}"
-}
 
-
-function reset() {
-   indentation = ""
-   buffer      = ""
-
-   _args = ""
-   _does = ""
-}
+# Need to think about the below function more. Will need an easy way of shifting
+# the "columns" indicator to the right. It's more a measure of the column, raer
+# than the "indentation". Easier way of thinking about it.
+#
+#function set_indentation(spaces,   n) {
+#   match($0, /^\s/)
+#   n = (spaces + RLENGTH - 2)
+#   indentation = "^#[[:space:]]{" n "}"
+#}
 
 #                                 build output
 #-------------------------------------------------------------------------------
-function build_arg(name, type, desc) {
-   name = "<td class='arg_name'>"     name  "</td>\n"
-   type = "<a href=#Types#" type ">"  type  "</a>"
-   type = "<td class='arg_type'>"     type  "</td>\n"
-   desc = "<td class='arg_desc'>"     desc  "</td>\n"
-
-   _args = _args "<tr class='arg_li'>\n" name type desc "</tr>"
-}
-
-
-function build_does() {
-   _does = "<div class='does'><p>\n" buffer "\n</p></div>"
-}
-
-
-function build_function(fn_name,   header, _function) {
-   header    = "\n<th> desc </th>"  header
-   header    = "\n<th> type </th>"  header
-   header    = "\n<th> arg  </th>"  header
-   header    = "\n<tr>"    header       "\n</tr>"
-   _args     = "\n<table>" header _args "\n</table>"
-
-   _function = "<h3 class='fn_name'>" fn_name "</h3>"
-   _function = _function  _args  _does
-   _function = "<div class='fn_block'>\n" _function "\n</div>"
-
-   # Concatenates this function's documentation with the main docs section of
-   # the currently generated html output.
-   html_docs = html_docs _function
-
-   # TODO: add `current_section` or something.
-   #
-   # Concatenates with the current table of contents. Needs to reference
-   # whatever section we're currently processing.
-   #
-}
 
 #                                   matches
 #-------------------------------------------------------------------------------
@@ -215,97 +165,6 @@ panicking && /^\s*#/ {
 }
 
 
-# Test if this line of text should be appended to the current buffer.
-indentation &&
-$0 ~ indentation {
-   sub(indentation, "")
-   buffer = buffer "\n" $0
-   next
-}
-
-
-# Matches:  # @arg
-# Need to use the `match()` function as it sets the `RLENGTH` variable to the
-# length of the matched string. 
-match($0, /^\s*#\s+@arg\s+/) {
-   write("@arg", "DEBUG")
-   sub(/^\s*#\s+@arg /, "")
-
-   name = pop_word()
-   type = pop_type()
-   desc = $0
-   build_arg(name, type, desc)
-
-   write("  name: " name, "DEBUG")
-   write("  type: " type, "DEBUG")
-   write("  desc: " desc, "DEBUG")
-   next
-}
-
-
-# Matches:  # @type
-match($0, /^\s*#\s+@type\s+/) {
-   write("@type", "DEBUG")
-   set_indentation(RLENGTH)
-   next
-}
-
-
-# Matches:  # @does
-match($0, /^\s*#\s+@does\s+/) {
-   write("@does", "DEBUG")
-
-   sub(/^\s*#\s+@does /, "")
-   set_indentation(RLENGTH)
-
-   lstrip()
-   buffer = $0
-
-   write("  " buffer, "DEBUG")
-   next
-}
-
-
-# Matches:  ^function foo {
-#
-# This is kinda our "synchronization point" for documenting a function. Upon
-# hitting the actual `function foo()` block (or equivalent), can store all the
-# information related to the function declaration.
-/^\s*function\s+[[:alpha:]_][[:alnum:]_]*\s*(\(\)\s*)?\{/ {
-   write("function()", "DEBUG")
-   fn_name = $2
-
-   sub(/\(\)/, "", fn_name)      # Remove potential trailing '()'
-   sub(/\{/,   "", fn_name)      # Remove potential trailing '{'
-   write("  name: " fn_name, "DEBUG")
-
-   build_function(fn_name)
-}
-
-# Matches:  ^foo() {
-/^\s*[[:alpha:]_][[:alnum:]_]*\s*\(\)\s*\{/ {
-   write("function()", "DEBUG")
-   fn_name = $1
-
-   sub(/\(\)/, "", fn_name)      # Remove potential trailing '()'
-   sub(/\{/,   "", fn_name)      # Remove potential trailing '{'
-   write("  name: " fn_name, "DEBUG")
-
-   build_function(fn_name)
-}
-
-
-# Declarations, for defining types. Synchronization point for @typedef.
-/^\s*(declare|local)\s+(-(-|[AagIilnrtux]+))?/ { }
-/^\s*[[:alpha:]_][[:alnum:]_]*=/ { }
-
-
-# Hitting a line *not* beginning with a comment resets our data/pointers.
-/^\s*[^#]/ {
-   reset()
-}
-
-
 END {
    if (isarray(errors)) {
       for (idx in errors) {
@@ -313,6 +172,4 @@ END {
       }
       exit 1
    }
-
-   print html_docs
 }
