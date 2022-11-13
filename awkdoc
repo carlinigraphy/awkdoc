@@ -58,6 +58,13 @@
 # Effectively, need to determine what category this line falls under. Append it
 # to the string buffer holding that thing (or an array?).
 # Hit synchronization point to build the overall output, unset the mini buffers.
+#
+# For now .md is an easy thing to target.
+# Non-temporary buffers:
+#  * TOC
+#  * Body
+#
+# Don't worry about typedefs, or sections. Only @arg and @does for now.
 
 BEGIN {
    # Color escapes. For pretty-printing debugging & error information.
@@ -66,7 +73,8 @@ BEGIN {
    c["yl"]  = "\033[33;1m"
    c["cy"]  = "\033[35m"
 
-   # Convenience variables to make boolean assignments more clear.
+   # Convenience variables to make boolean assignments more clear. Seems like
+   # these use the same rules as (( ... )) tests in bash.
    false = 0
    true  = 1
 
@@ -74,17 +82,26 @@ BEGIN {
    panicking      = false
    opts["@arg"]   = true
    opts["@does"]  = true
+
+   # Determining if we're in a multiline string.
+   column = 0
+
+   # Temporary buffers.
+   tmp_arg  = ""           # Function arguments.
+   tmp_does = ""           # What a function does.
+   tmp_fn   = ""
+
+   # Hacky way of 'declaring' an array:
+   delete errors[0]
 }
 
 #                               I/O & debugging
 #-------------------------------------------------------------------------------
-function format(text, level) {
-   switch (level) {
-      case "CRIT":   text = c["rd"]  "[CRIT] "  c["rst"] text
-      case "WARN":   text = c["yl"]  "[WARN] "  c["rst"] text
-      case "INFO":   text = c["cy"]  "[INFO] "  c["rst"] text
-      case "DEBUG":  text = c["cy"]  "[DBUG] "  c["rst"] text
-   }
+function format(text, level,   color) {
+   if (level == "CRIT" )  text = "["  c["rd"]  "CRIT"  c["rst"]  "] "  text
+   if (level == "WARN" )  text = "["  c["yl"]  "WARN"  c["rst"]  "] "  text
+   if (level == "INFO" )  text = "["  c["cy"]  "INFO"  c["rst"]  "] "  text
+   if (level == "DEBUG")  text = "["  c["cy"]  "DBUG"  c["rst"]  "] "  text
    return text
 }
 
@@ -110,14 +127,14 @@ function rstrip() { sub(/\s*$/, "") }
 # and after the .pop()
 function pop_word(name) {
    name = $1
-   sub(/^[[:space:]]*[^[:space:]]*[[:space:]]*/, "")
+   sub(/[^[:space:]]*[[:space:]]*/, "")
    return name
 }
 
 
 function pop_type(type) {
    # Typedefs must be surrounded by parens.
-   if (! match($1, /\([[:alpha:]_][[:alnum:]_]*\)/)) {
+   if (! match($1, /\([[:alpha:]_][[:alnum:]_]*\)/ )) {
       panicking = true
       log_error("arg typedef should be in parentheses.", "WARN")
       next
@@ -129,26 +146,36 @@ function pop_type(type) {
    return type
 }
 
-
-function push(arr, item) {
-    arr[length(arr)+1] = item
-}
-
 #                                  utilities
 #-------------------------------------------------------------------------------
+function reset() {
+   cursor   = 0
+   tmp_arg  = ""
+   tmp_does = ""
+   tmp_fn   = ""
+}
 
-# Need to think about the below function more. Will need an easy way of shifting
-# the "columns" indicator to the right. It's more a measure of the column, raer
-# than the "indentation". Easier way of thinking about it.
-#
-#function set_indentation(spaces,   n) {
-#   match($0, /^\s/)
-#   n = (spaces + RLENGTH - 2)
-#   indentation = "^#[[:space:]]{" n "}"
-#}
+
+function push(arr, item) {
+   arr[length(arr)+1] = item
+}
 
 #                                 build output
 #-------------------------------------------------------------------------------
+function build_function(name,   idx) {
+   print tmp_arg
+   reset() ; next
+}
+
+
+function build_arg(name, type, desc) {
+   type = gensub(type, "([&](#Types#&))", 1, type)
+
+   if (tmp_arg)
+      tmp_arg = tmp_arg "\n"
+
+   tmp_arg = tmp_arg "- *" name "* "  type  " "  desc
+}
 
 #                                   matches
 #-------------------------------------------------------------------------------
@@ -162,6 +189,42 @@ panicking && /^\s*#/ {
    } else {
       next
    }
+}
+
+
+match($0, /^\s*#\s+@arg\s+/) {
+   cursor = cursor + RLENGTH - 1
+   sub(/^\s*#\s+@arg\s+/, "")
+
+   name = pop_word()
+   type = pop_type()
+   desc = $0
+
+   build_arg(name, type, desc)
+}
+
+
+# match:  function foo {
+# match:  foo() {
+#
+# Functions can be declared in bash either with the function keyword, or with
+# the literal syntax identifier + () + {...}.
+/^\s*function\s+[[:alpha:]][[:alnum:]_:\.]*\s*(\(\))?\s*\{/ ||
+/^\s*[[:alpha:]][[:alnum:]_:\.]*\s*\(\)\s*\{/ {
+   # In case of the former option, remove leading `function' keyword.
+   sub(/^\s*function/, "")
+
+   name = $1
+   sub(/\(\)/, "", name)
+   sub(/\{$/,  "", name)
+
+   build_function(name)
+}
+
+
+# Non comment text. Reset temporary buffers.
+/^\s*[^#]/ {
+   reset()
 }
 
 
