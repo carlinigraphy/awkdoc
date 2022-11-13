@@ -19,52 +19,6 @@
 # [5] https://www.math.utah.edu/docs/info/gawk_13.html
 #
 #-------------------------------------------------------------------------------
-# Some notes on things I'd want:
-#
-# @notes       Additional notes about implementation, things to look out for
-# @type        Declare something as a "type", hyperlink other references to
-#              types (in functions and whatnot) to the declared type. Helps
-#              to build a 'map' of where everything is used.
-# @arg         Declares an argument to a function by the name it's referred
-#              to as within the function, and its type.
-# @noarg       Same as shdoc
-# @section     Same as shdoc
-# @see         Same as shdoc
-# @stdin       Same as shdoc
-# @stdout      Same as shdoc
-# @stderr      Same as shdoc
-# @internal    Same as shdoc
-# @does        Same as shdoc's @description
-# @global:r    Global variables READ
-# @global:w    Global variables SET
-# @global:rw   Global variables UPDATE
-#
-# Maybe actually build an html doc, if possible, instead of a .md doc. Still
-# similar to produce, yes easier to open in any browser.
-#
-#-------------------------------------------------------------------------------
-# TODO
-#  - [ ] Create pointer to reference the current section:  `current_section`?
-#
-#-------------------------------------------------------------------------------
-# THINKIES
-#
-# Iterating line-by-line. Each line is either:
-#  1. A comment beginning with a flag  (@arg, @does, etc.)
-#  2. A synchronization point (non-comment function declaration)
-#  3. Multi-line addition to an immediately previous flag
-#  4. None of the above (non-comment line, empty comment line, regular comment)
-#
-# Effectively, need to determine what category this line falls under. Append it
-# to the string buffer holding that thing (or an array?).
-# Hit synchronization point to build the overall output, unset the mini buffers.
-#
-# For now .md is an easy thing to target.
-# Non-temporary buffers:
-#  * TOC
-#  * Body
-#
-# Don't worry about typedefs, or sections. Only @arg and @does for now.
 
 BEGIN {
    # Color escapes. For pretty-printing debugging & error information.
