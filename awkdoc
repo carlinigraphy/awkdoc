@@ -82,12 +82,30 @@ BEGIN {
 
    column = 0
    buffer = ""
+
+   # gensub() format strings.
+   md["h1"]   = "# &"
+   md["h2"]   = "## &"
+   md["h3"]   = "### &"
+   md["h4"]   = "#### &"
+   md["h5"]   = "##### &"
+   md["link"] = "[&](#&)"
+
+   # Links to format strings.
+   md["toc"]     = md["h1"]
+   md["body"]    = md["h1"]
+   md["section"] = md["h2"]
+   md["fn"]      = md["h3"]
+   md["args"]    = md["h4"]
+
+   _TOC  = ""
+   _BODY = ""
 }
 
 #                               I/O & debugging
 #-------------------------------------------------------------------------------
-# TODO: flag to disable colored output.
 function format(text, level) {
+   if (ENVIRON["AWKDOC_NO_COLOR"]) level = ""
    if (level == "CRIT")  text = c["rd"]  "[CRIT] "  c["rst"] text
    if (level == "WARN")  text = c["yl"]  "[WARN] "  c["rst"] text
    if (level == "INFO")  text = c["cy"]  "[INFO] "  c["rst"] text
@@ -98,8 +116,7 @@ function format(text, level) {
 
 function log_error(text, level) {
    text = "ln. "  NR  ", "  text
-   text = format(text, level)
-   push(errors, text)
+   push(errors, format(text, level))
 }
 
 
@@ -126,6 +143,21 @@ function push(key, val) {
    key[length(key)+1] = val
 }
 
+
+function cat(str, text) {
+   if (str) {
+      str = str "\n" text
+   } else {
+      str = text
+   }
+   return str
+}
+
+
+function _gensub(str, repl) {
+   return gensub(str, repl, 1, str)
+}
+
 #                                  utilities
 #-------------------------------------------------------------------------------
 function reset() {
@@ -142,13 +174,25 @@ function add_arg(name, type, desc,   arg) {
 }
 
 
-function add_fn(name) {
-   print "\n" name "()"
-   print "|name|type|desc|"
-   print "|----|----|----|"
+function add_fn(name,  _f) {
+   # Function heading.
+   _f = cat(_f, _gensub(name, md["fn"]))
+   
+   # Description.
+   _f = cat(_f, buffer "\n")
+
+   # Args heading.
+   _f = cat(_f, _gensub("args", md["args"]))
+
+   # Args table.
+   _f = cat(_f, "|name|type|desc|")
+   _f = cat(_f, "|----|----|----|")
    for (a in fn["args"]) {
-      print fn["args"][a]
+      _f = cat(_f, fn["args"][a])
    }
+   _f = _f "\n"
+
+   _BODY = cat(_BODY, _f)
 }
 
 #                                 build output
@@ -206,12 +250,7 @@ match($0, /^\s*#\s+@description\s*/) {
 
    # Shift off column# characters.
    sub(".{" column "}", "")
-
-   if (buffer) {
-      buffer = buffer "\n" $0
-   } else {
-      buffer = $0
-   }
+   buffer = cat(buffer, $0)
 }
 
 
@@ -232,7 +271,7 @@ match($0, /^\s*#\s+@description\s*/) {
 }
 
 
-/^\s*[^#]/ {
+/^[^#]/ && /^\s+[^#]/ {
    reset()
 }
 
@@ -244,4 +283,6 @@ END {
       }
       exit 1
    }
+
+   print _BODY
 }
