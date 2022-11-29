@@ -21,12 +21,13 @@
 #-------------------------------------------------------------------------------
 # Some notes on things I'd want:
 #
-# @notes       Additional notes about implementation, things to look out for
 # @type        Declare something as a "type", hyperlink other references to
 #              types (in functions and whatnot) to the declared type. Helps
 #              to build a 'map' of where everything is used.
 # @arg         Declares an argument to a function by the name it's referred
 #              to as within the function, and its type.
+# @notes       Additional notes about implementation, things to look out for
+# @description Same as shdoc
 # @noarg       Same as shdoc
 # @section     Same as shdoc
 # @see         Same as shdoc
@@ -34,23 +35,16 @@
 # @stdout      Same as shdoc
 # @stderr      Same as shdoc
 # @internal    Same as shdoc
-# @does        Same as shdoc's @description
-# @global:r    Global variables READ
-# @global:w    Global variables SET
-# @global:rw   Global variables UPDATE
+# @env         Same as shdoc
+# @sets        Same as shdoc
 #
-# Maybe actually build an html doc, if possible, instead of a .md doc. Still
-# similar to produce, yes easier to open in any browser.
-#
-#-------------------------------------------------------------------------------
-# TODO
-#  - [ ] Create pointer to reference the current section:  `current_section`?
+# Reference the file & line number in the generated output.
 #
 #-------------------------------------------------------------------------------
 # THINKIES
 #
 # Iterating line-by-line. Each line is either:
-#  1. A comment beginning with a flag  (@arg, @does, etc.)
+#  1. A comment beginning with a flag  (@arg, @description, etc.)
 #  2. A synchronization point (non-comment function declaration)
 #  3. Multi-line addition to an immediately previous flag
 #  4. None of the above (non-comment line, empty comment line, regular comment)
@@ -58,6 +52,14 @@
 # Effectively, need to determine what category this line falls under. Append it
 # to the string buffer holding that thing (or an array?).
 # Hit synchronization point to build the overall output, unset the mini buffers.
+#
+# All flags must call `next` at the end of their body.
+# All sync points must call `next` at the end of their body.
+# Any remaining comment text is appended to the buffer.
+#
+# Can do links to functions within sections via `sections[]` map. Set a _SECTION
+# variable tracking whatever section we're currently in. If unset, don't map the
+# function. For @see references can do `path = '#' + s when s = sections[fn]`.
 
 BEGIN {
    # Color escapes. For pretty-printing debugging & error information.
@@ -71,20 +73,25 @@ BEGIN {
    true  = 1
 
    # Upon hitting an error, "panic" until the start of a next valid opt.
-   panicking      = false
-   opts["@arg"]   = true
-   opts["@does"]  = true
+   panicking             = false
+   opts["@arg"]          = true
+   opts["@description"]  = true
+
+   # "Declaring" errors[] as an array, via witchcraft.
+   delete errors[0]
+
+   column = 0
+   buffer = ""
 }
 
 #                               I/O & debugging
 #-------------------------------------------------------------------------------
+# TODO: flag to disable colored output.
 function format(text, level) {
-   switch (level) {
-      case "CRIT":   text = c["rd"]  "[CRIT] "  c["rst"] text
-      case "WARN":   text = c["yl"]  "[WARN] "  c["rst"] text
-      case "INFO":   text = c["cy"]  "[INFO] "  c["rst"] text
-      case "DEBUG":  text = c["cy"]  "[DBUG] "  c["rst"] text
-   }
+   if (level == "CRIT")  text = c["rd"]  "[CRIT] "  c["rst"] text
+   if (level == "WARN")  text = c["yl"]  "[WARN] "  c["rst"] text
+   if (level == "INFO")  text = c["cy"]  "[INFO] "  c["rst"] text
+   if (level == "DEBUG") text = c["cy"]  "[DBUG] "  c["rst"] text
    return text
 }
 
@@ -108,44 +115,41 @@ function rstrip() { sub(/\s*$/, "") }
 
 # Pops the first word of the current line. Removes preceding whitespace before
 # and after the .pop()
-function pop_word(name) {
+function shift(   name) {
    name = $1
    sub(/^[[:space:]]*[^[:space:]]*[[:space:]]*/, "")
    return name
 }
 
 
-function pop_type(type) {
-   # Typedefs must be surrounded by parens.
-   if (! match($1, /\([[:alpha:]_][[:alnum:]_]*\)/)) {
-      panicking = true
-      log_error("arg typedef should be in parentheses.", "WARN")
-      next
-   }
-
-   # Pop first word from stack, remove surrounding parens.
-   type = pop_word()
-   sub(/^\(/, "", type) ; sub(/\)$/, "", type)
-   return type
-}
-
-
-function push(arr, item) {
-    arr[length(arr)+1] = item
+function push(key, val) {
+   key[length(key)+1] = val
 }
 
 #                                  utilities
 #-------------------------------------------------------------------------------
+function reset() {
+   column = 0
+   buffer = ""
+   delete fn
+}
 
-# Need to think about the below function more. Will need an easy way of shifting
-# the "columns" indicator to the right. It's more a measure of the column, raer
-# than the "indentation". Easier way of thinking about it.
-#
-#function set_indentation(spaces,   n) {
-#   match($0, /^\s/)
-#   n = (spaces + RLENGTH - 2)
-#   indentation = "^#[[:space:]]{" n "}"
-#}
+
+function add_arg(name, type, desc,   arg) {
+   gsub(/\|/, "\\|", desc)
+   arg = "|" name "|" type "|" desc "|"
+   push(fn["args"], arg)
+}
+
+
+function add_fn(name) {
+   print "\n" name "()"
+   print "|name|type|desc|"
+   print "|----|----|----|"
+   for (a in fn["args"]) {
+      print fn["args"][a]
+   }
+}
 
 #                                 build output
 #-------------------------------------------------------------------------------
@@ -155,7 +159,7 @@ function push(arr, item) {
 # This should always be the first match.
 #
 # When hitting an error, start skipping lines until we hit a new synchronization
-# point--a valid @identifier.
+# point--a valid @-identifier.
 panicking && /^\s*#/ {
    if (opts[$2]) {
       panicking = false
@@ -165,8 +169,76 @@ panicking && /^\s*#/ {
 }
 
 
+/^\s*#\s+@arg/ {
+   sub(/^\s*#\s+@arg\s*/, "")
+
+   name = shift()
+
+   if (match($1, /^:[[:alpha:]_][[:alnum:]_:-]*/)) {
+      sub(/^:/, "")
+      type = shift()
+   } else {
+      type = ""
+   }
+
+   add_arg(name, type, $0)
+   next
+}
+
+
+match($0, /^\s*#\s+@description\s*/) {
+   sub(/^\s*#\s+@description\s*/, "")
+
+   if ($1) {
+      column = RLENGTH
+      buffer = $0
+   }
+
+   next
+}
+
+
+/^\s*#\s+[^$]/ {
+   if (column == 0) {
+      match($0, /^\s*#\s+/)
+      column = RLENGTH
+   }
+
+   # Shift off column# characters.
+   sub(".{" column "}", "")
+
+   if (buffer) {
+      buffer = buffer "\n" $0
+   } else {
+      buffer = $0
+   }
+}
+
+
+/^\s*#\s*$/ {
+   next
+}
+
+
+# match:  function declarations
+/^\s*function\s+[[:alpha:]_][[:alnum:]_:-]*/ ||
+/^\s*[[:alpha:]_][[:alnum:]_:-]*\s*\(\s*\)/ {
+   sub(/^\s*function/, "")
+   sub(/\s*/, "")
+   sub(/\(.*)/, "")
+
+   add_fn($1)
+   reset() ; next
+}
+
+
+/^\s*[^#]/ {
+   reset()
+}
+
+
 END {
-   if (isarray(errors)) {
+   if (length(errors) > 0) {
       for (idx in errors) {
          print errors[idx] > "/dev/stderr"
       }
