@@ -1,14 +1,5 @@
 #!/usr/bin/awk -f
 # vim: ft=awk tw=80 sw=3 ts=3 sts=3
-#
-# It would be trivial to write this in bash. Will likely make a bash version
-# down the line. However I've wanted to learn more "advanced" AWK for a great
-# long while. This is a good project to do so.
-#
-# Attempting something to build documentation from comments. Javadoc style. Not
-# too sure on the format I'm going with. Probably going to mirror very similar
-# functionality from shdoc.
-#
 #-------------------------------------------------------------------------------
 # ref.
 # [0] https://github.com/reconquest/shdoc
@@ -19,47 +10,39 @@
 # [5] https://www.math.utah.edu/docs/info/gawk_13.html
 #
 #-------------------------------------------------------------------------------
-# Some notes on things I'd want:
-#
-# @type        Declare something as a "type", hyperlink other references to
-#              types (in functions and whatnot) to the declared type. Helps
-#              to build a 'map' of where everything is used.
-# @arg         Declares an argument to a function by the name it's referred
-#              to as within the function, and its type.
-# @notes       Additional notes about implementation, things to look out for
-# @description Same as shdoc
-# @noarg       Same as shdoc
-# @section     Same as shdoc
-# @see         Same as shdoc
-# @stdin       Same as shdoc
-# @stdout      Same as shdoc
-# @stderr      Same as shdoc
-# @internal    Same as shdoc
-# @env         Same as shdoc
-# @sets        Same as shdoc
-#
-# Reference the file & line number in the generated output.
+# Features
+# - [x] @arg
+# - [x] @description
+# - [ ] @type
+# - [ ] @noarg
+# - [ ] @section
+# - [ ] @see
+# - [ ] @stdin
+# - [ ] @stdout
+# - [ ] @stderr
+# - [ ] @internal
+# - [ ] @env
+# - [ ] @sets
 #
 #-------------------------------------------------------------------------------
-# THINKIES
+# Thinkies
+# Might need to rework syntax. Can be annoying to tell what comments are part
+# of an existing multiline block, or irrelevant. Maybe common prefix for things?
+#       #|arg  $1  <type>  <desc>
+#       #|sets $1
+#       #|description
+#       #|  Here's a block of text that's clearly attached
+#       #|  to the description
+#       # And this very much is not attached to the above.
+#       #
+#       #> Here's a block to wrap in a  ```bash ... ```
 #
-# Iterating line-by-line. Each line is either:
-#  1. A comment beginning with a flag  (@arg, @description, etc.)
-#  2. A synchronization point (non-comment function declaration)
-#  3. Multi-line addition to an immediately previous flag
-#  4. None of the above (non-comment line, empty comment line, regular comment)
+# Really it's just the start/end of multiline blocks that's confusing. Maybe
+# need to only match on text that meets the indentation level.
+#> indent = "#\s{" column -1 "}"
+#> if match($0, indent) { ... }
 #
-# Effectively, need to determine what category this line falls under. Append it
-# to the string buffer holding that thing (or an array?).
-# Hit synchronization point to build the overall output, unset the mini buffers.
-#
-# All flags must call `next` at the end of their body.
-# All sync points must call `next` at the end of their body.
-# Any remaining comment text is appended to the buffer.
-#
-# Can do links to functions within sections via `sections[]` map. Set a _SECTION
-# variable tracking whatever section we're currently in. If unset, don't map the
-# function. For @see references can do `path = '#' + s when s = sections[fn]`.
+#-------------------------------------------------------------------------------
 
 BEGIN {
    # Color escapes. For pretty-printing debugging & error information.
@@ -115,8 +98,9 @@ function format(text, level) {
 
 
 function log_error(text, level) {
-   text = "ln. "  NR  ", "  text
+   text = "ln. "  FNR  ", "  text
    push(errors, format(text, level))
+   panicking = true
 }
 
 
@@ -144,13 +128,13 @@ function push(key, val) {
 }
 
 
-function cat(str, text) {
-   if (str) {
-      str = str "\n" text
+function cat(left, right) {
+   if (left) {
+      left = left "\n" right
    } else {
-      str = text
+      left = right
    }
-   return str
+   return left
 }
 
 
@@ -166,7 +150,8 @@ function reset() {
    delete fn
 }
 
-
+#                                 build output
+#-------------------------------------------------------------------------------
 function add_arg(name, type, desc,   arg) {
    gsub(/\|/, "\\|", desc)
    arg = "|" name "|" type "|" desc "|"
@@ -177,6 +162,9 @@ function add_arg(name, type, desc,   arg) {
 function add_fn(name,  _f) {
    # Function heading.
    _f = cat(_f, _gensub(name, md["fn"]))
+
+   # Location.
+   _f = cat(_f, "ln. "  FNR  ", in "  FILENAME  "\n")
    
    # Description.
    _f = cat(_f, buffer "\n")
@@ -195,14 +183,16 @@ function add_fn(name,  _f) {
    _BODY = cat(_BODY, _f)
 }
 
-#                                 build output
-#-------------------------------------------------------------------------------
+
+function add_section(name,   _s) {
+   _s = cat(_s, _gensub(name, md["section"]))
+   if (buffer) _s = cat(_s, buffer "\n")
+   _BODY = cat(_BODY, _s)
+}
 
 #                                   matches
 #-------------------------------------------------------------------------------
-# This should always be the first match.
-#
-# When hitting an error, start skipping lines until we hit a new synchronization
+# Must always be the first match. If hit an error, skip until a synchronization
 # point--a valid @-identifier.
 panicking && /^\s*#/ {
    if (opts[$2]) {
@@ -213,6 +203,17 @@ panicking && /^\s*#/ {
 }
 
 
+# match: @section
+#
+/^\s*#\s+@section/ {
+   sub(/^\s*#\s+@section\s*/, "")
+   add_section(shift())
+   next
+}
+
+
+# match:  @arg
+#
 /^\s*#\s+@arg/ {
    sub(/^\s*#\s+@arg\s*/, "")
 
@@ -230,6 +231,10 @@ panicking && /^\s*#/ {
 }
 
 
+# match: @description
+#
+# Will match text beginning on the same line, as well as the subsequent line.
+# Dedents text to the level of the initial line.
 match($0, /^\s*#\s+@description\s*/) {
    sub(/^\s*#\s+@description\s*/, "")
 
@@ -242,6 +247,10 @@ match($0, /^\s*#\s+@description\s*/) {
 }
 
 
+# match: regular comment text
+#
+# TODO: Allow for empty lines in output.
+#       Currently all lines that are just /^#/ don't show up in the output.
 /^\s*#\s+[^$]/ {
    if (column == 0) {
       match($0, /^\s*#\s+/)
@@ -251,6 +260,8 @@ match($0, /^\s*#\s+@description\s*/) {
    # Shift off column# characters.
    sub(".{" column "}", "")
    buffer = cat(buffer, $0)
+
+   next
 }
 
 
@@ -259,7 +270,8 @@ match($0, /^\s*#\s+@description\s*/) {
 }
 
 
-# match:  function declarations
+# match:  function declarations, both styles
+#
 /^\s*function\s+[[:alpha:]_][[:alnum:]_:-]*/ ||
 /^\s*[[:alpha:]_][[:alnum:]_:-]*\s*\(\s*\)/ {
    sub(/^\s*function/, "")
@@ -271,9 +283,8 @@ match($0, /^\s*#\s+@description\s*/) {
 }
 
 
-/^[^#]/ && /^\s+[^#]/ {
-   reset()
-}
+# match:  non-comment text, empty lines
+/^\s*[^#]/ || /^\s*$/ { reset() }
 
 
 END {

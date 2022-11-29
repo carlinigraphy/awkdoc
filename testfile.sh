@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# @section                    Something
+
 # @description      (21), and
 #                   a second line of output.
 #
@@ -12,8 +14,11 @@ function foo { :; }
 #  (4), and here is a description on the subsequent line, and...
 #  a second line of output.
 #
+#  Beep bap blip.
+#
 # @arg  here     :there    Desc 1
 # @arg  this     Desc 2
-function foo {
+bar ( )
+{
    return
 }
