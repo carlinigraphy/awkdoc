@@ -131,7 +131,7 @@ Annotation flags must occur...
 Specifies an argument, with optional type and one-line description.
 
 Types are indicated by a `:` prefix.
-An anchor to the `Types` heading is created when the type matches a declared <<_type>>
+An anchor to the `Types` heading is created when the type matches a declared <<_type,type>>
 
 .Example
 ```bash
