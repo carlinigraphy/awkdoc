@@ -14,39 +14,15 @@
 # - [x] @arg
 # - [x] @description
 # - [x] @section
-# - [ ] @env
-# - [ ] @sets
-# - [ ] @type
-# - [ ] @noarg
+# - [x] @env
+# - [x] @sets
 # - [ ] @see
+# - [ ] @type
+# - [ ] @noargs
 # - [ ] @stdin
 # - [ ] @stdout
 # - [ ] @stderr
 # - [ ] @internal
-#
-#-------------------------------------------------------------------------------
-# Thinkies
-# Might need to rework syntax. Can be annoying to tell what comments are part
-# of an existing multiline block, or irrelevant. Maybe common prefix for things?
-#       #|arg  $1  <type>  <desc>
-#       #|sets $1
-#       #|description
-#       #|  Here's a block of text that's clearly attached
-#       #|  to the description
-#       # And this very much is not attached to the above.
-#       #
-#       #> Here's a block to wrap in a  ```bash ... ```
-#
-# Really it's just the start/end of multiline blocks that's confusing. Maybe
-# need to only match on text that meets the indentation level.
-#> indent = "#\s{" column -1 "}"
-#> if match($0, indent) { ... }
-#
-# Can't only do it indentation based, or a comment like this would be caught:
-#> @description
-#>   beep boop here's a line
-#> this won't be in the output
-#>   but this would!
 #
 #-------------------------------------------------------------------------------
 
@@ -78,7 +54,7 @@ BEGIN {
    md["h3"]   = "### &"
    md["h4"]   = "#### &"
    md["h5"]   = "##### &"
-   md["link"] = "[&](#&)"
+   md["link"] = "[`&`](#&)"
    md["li1"]  = "- &"_a 
    md["li2"]  = "  - &"
 
@@ -108,10 +84,8 @@ function reset() {
 #-------------------------------------------------------------------------------
 function format(text, level) {
    if (ENVIRON["AWKDOC_NO_COLOR"]) level = ""
-   if (level == "CRIT")  text = c["rd"]  "[CRIT] "  c["rst"] text
-   if (level == "WARN")  text = c["yl"]  "[WARN] "  c["rst"] text
-   if (level == "INFO")  text = c["cy"]  "[INFO] "  c["rst"] text
-   if (level == "DEBUG") text = c["cy"]  "[DBUG] "  c["rst"] text
+   if (level == 1) text = c["rd"]  "[ERROR] "  c["rst"] text
+   if (level == 2) text = c["cy"]  "[DEBUG] "  c["rst"] text
    return text
 }
 
@@ -184,13 +158,6 @@ function add_section(   s, t) {
 }
 
 
-function add_arg(name, type, desc,   arg) {
-   gsub(/\|/, "\\|", desc)
-   arg = "|" name "|" type "|" desc "|"
-   push(fn["args"], arg)
-}
-
-
 function add_fn(name,  f,t,a,_a) {
    # Function heading/location.
    f = _gensub(name, md["fn"])
@@ -226,8 +193,20 @@ function add_fn(name,  f,t,a,_a) {
    if (fn["env"][0]) {
       f = cat(f "\n", _gensub("uses", md["sub"]))
       for (a in fn["env"]) {
-         _a = _gensub(fn["sets"][a], md["li1"])
-         f = cat(f, "`" _a "`")
+         _a = "`" fn["env"][a] "`"
+         _a = _gensub(_a, md["li1"])
+         f = cat(f, _a)
+      }
+   }
+
+   # References to other variables.
+   if (fn["see"][0]) {
+      f = cat(f "\n", _gensub("see", md["sub"]))
+      for (a in fn["see"]) {
+         _a = fn["see"][a]
+         _a = gensub(".*", md["link"], 1, _a)
+         _a = gensub(".*", md["li1"],  1, _a)
+         f = cat(f, _a)
       }
    }
 
@@ -240,6 +219,13 @@ function add_fn(name,  f,t,a,_a) {
 }
 
 
+function add_arg(name, type, desc,   arg) {
+   gsub(/\|/, "\\|", desc)
+   arg = "|" name "|" type "|" desc "|"
+   push(fn["args"], arg)
+}
+
+
 function add_sets(name) {
    push(fn["sets"], name)
 }
@@ -247,6 +233,11 @@ function add_sets(name) {
 
 function add_env(name) {
    push(fn["env"], name)
+}
+
+
+function add_see(name) {
+   push(fn["see"], name)
 }
 
 
@@ -265,9 +256,15 @@ panicking && /^\s*#/ {
 
 # match:  @section
 #
-/^\s*#\s+@section\s+/ {
-   sub(/^\s*#\s+@section\s+/, "")
+/^\s*#\s+@section(\s*|$)/ {
+   sub(/^\s*#\s+@section\s*/, "")
    section = $0
+
+   if (! section) {
+      log_error("Missing section title", 1)
+   }
+
+   buffer_open = false
    next
 }
 
@@ -286,6 +283,8 @@ panicking && /^\s*#/ {
    }
 
    add_arg(name, type, $0)
+
+   buffer_open = false
    next
 }
 
@@ -295,6 +294,8 @@ panicking && /^\s*#/ {
 /^\s*#\s+@sets\s+/ {
    sub(/^\s*#\s+@sets\s+/, "")
    add_sets(shift())
+
+   buffer_open = false
    next
 }
 
@@ -304,6 +305,19 @@ panicking && /^\s*#/ {
 /^\s*#\s+@env\s+/ {
    sub(/^\s*#\s+@env\s+/, "")
    add_env(shift())
+
+   buffer_open = false
+   next
+}
+
+
+# match:  @see
+#
+/^\s*#\s+@see\s+/ {
+   sub(/^\s*#\s+@see\s+/, "")
+   add_see(shift())
+
+   buffer_open = false
    next
 }
 
