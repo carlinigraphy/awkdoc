@@ -14,6 +14,8 @@
 # - [x] @arg
 # - [x] @description
 # - [x] @section
+# - [ ] @env
+# - [ ] @sets
 # - [ ] @type
 # - [ ] @noarg
 # - [ ] @see
@@ -21,8 +23,6 @@
 # - [ ] @stdout
 # - [ ] @stderr
 # - [ ] @internal
-# - [ ] @env
-# - [ ] @sets
 #
 #-------------------------------------------------------------------------------
 # Thinkies
@@ -79,7 +79,7 @@ BEGIN {
    md["h4"]   = "#### &"
    md["h5"]   = "##### &"
    md["link"] = "[&](#&)"
-   md["li1"]  = "- &"
+   md["li1"]  = "- &"_a 
    md["li2"]  = "  - &"
 
    # Links to format strings.
@@ -87,11 +87,22 @@ BEGIN {
    md["body"]    = md["h1"]
    md["section"] = md["h2"]
    md["fn"]      = md["h3"]
-   md["args"]    = md["h4"]
+   md["sub"]     = md["h4"]
 
    _TOC  = _gensub("Contents.", md["toc"])
    _BODY = _gensub("Functions.", md["body"])
 }
+
+
+function reset() {
+   column      = 0
+   buffer_open = false
+   buffer      = ""
+   section     = ""
+
+   delete fn
+}
+
 
 #                               I/O & debugging
 #-------------------------------------------------------------------------------
@@ -116,11 +127,12 @@ function write(text, level) {
    print format(text, level) > "/dev/stderr"
 }
 
+
 #                              text manipulation
 #-------------------------------------------------------------------------------
-function strip()  { sub(/(^\s*|\s*$)/ , "") }
-function lstrip() { sub(/^\s*/        , "") }
-function rstrip() { sub(/\s*$/        , "") }
+function strip(s)  { sub(/(^\s*|\s*$)/ , "" , s) }
+function lstrip(s) { sub(/^\s*/        , "" , s) }
+function rstrip(s) { sub(/\s*$/        , "" , s) }
 
 # Pops the first word of the current line. Removes preceding whitespace before
 # and after the .pop()
@@ -155,53 +167,9 @@ function _gensub(str, repl) {
    return gensub(str, repl, 1, str)
 }
 
-#                                  utilities
-#-------------------------------------------------------------------------------
-function reset() {
-   column      = 0
-   buffer_open = false
-   buffer      = ""
-   section     = ""
-
-   delete fn
-}
 
 #                                 build output
 #-------------------------------------------------------------------------------
-function add_arg(name, type, desc,   arg) {
-   gsub(/\|/, "\\|", desc)
-   arg = "|" name "|" type "|" desc "|"
-   push(fn["args"], arg)
-}
-
-
-function add_fn(name,  f, t) {
-   # Function heading.
-   f = _gensub(name, md["fn"])
-
-   # Location.
-   f = cat(f, "[_ln. "  FNR  ", in "  FILENAME  "_]\n")
-   
-   # Description.
-   f = cat(f, buffer "\n")
-
-   # Args heading.
-   f = cat(f, _gensub("args", md["args"]))
-
-   # Args table.
-   f = cat(f, "|name|type|desc|")
-   f = cat(f, "|:---|:---|:---|")
-   for (a in fn["args"]) {
-      f = cat(f, fn["args"][a])
-   }
-   _BODY = cat(_BODY, f "\n")
-
-   t = _gensub(name, md["link"])
-   t = gensub(".*", md["li2"], 1, t)
-   _TOC  = cat(_TOC,  t)
-}
-
-
 function add_section(   s, t) {
    s = _gensub(section, md["section"])
    if (buffer) {
@@ -214,6 +182,73 @@ function add_section(   s, t) {
    _BODY = cat(_BODY, s)
    _TOC  = cat(_TOC,  t)
 }
+
+
+function add_arg(name, type, desc,   arg) {
+   gsub(/\|/, "\\|", desc)
+   arg = "|" name "|" type "|" desc "|"
+   push(fn["args"], arg)
+}
+
+
+function add_fn(name,  f,t,a,_a) {
+   # Function heading/location.
+   f = _gensub(name, md["fn"])
+   f = cat(f, "[_ln. "  FNR  ", in "  FILENAME  "_]\n")
+   
+   # Description.
+   if (buffer) {
+      f = cat(f, buffer)
+   }
+
+   # Args.
+   if (fn["args"][0]) {
+      f = cat(f "\n", _gensub("args", md["sub"]))
+      f = cat(f, "|name|type|desc|")
+      f = cat(f, "|:---|:---|:---|")
+
+      for (a in fn["args"]) {
+         f = cat(f, fn["args"][a])
+      }
+   }
+
+   # Sets global variables.
+   if (fn["sets"][0]) {
+      f = cat(f "\n", _gensub("sets", md["sub"]))
+      for (a in fn["sets"]) {
+         _a = "`" fn["sets"][a] "`"
+         _a = _gensub(_a, md["li1"])
+         f = cat(f, _a)
+      }
+   }
+
+   # Uses global/environment variables.
+   if (fn["env"][0]) {
+      f = cat(f "\n", _gensub("uses", md["sub"]))
+      for (a in fn["env"]) {
+         _a = _gensub(fn["sets"][a], md["li1"])
+         f = cat(f, "`" _a "`")
+      }
+   }
+
+   # Append to TOC.
+   t = _gensub(name, md["link"])
+   t = gensub(".*", md["li2"], 1, t)
+
+   _TOC  = cat(_TOC,  t)
+   _BODY = cat(_BODY, f "\n")
+}
+
+
+function add_sets(name) {
+   push(fn["sets"], name)
+}
+
+
+function add_env(name) {
+   push(fn["env"], name)
+}
+
 
 #                                   matches
 #-------------------------------------------------------------------------------
@@ -228,10 +263,10 @@ panicking && /^\s*#/ {
 }
 
 
-# match: @section
+# match:  @section
 #
-/^\s*#\s+@section/ {
-   sub(/^\s*#\s+@section\s*/, "")
+/^\s*#\s+@section\s+/ {
+   sub(/^\s*#\s+@section\s+/, "")
    section = $0
    next
 }
@@ -239,9 +274,8 @@ panicking && /^\s*#/ {
 
 # match:  @arg
 #
-/^\s*#\s+@arg/ {
-   sub(/^\s*#\s+@arg\s*/, "")
-
+/^\s*#\s+@arg\s+/ {
+   sub(/^\s*#\s+@arg\s+/, "")
    name = shift()
 
    if (match($1, /^:[[:alpha:]_][[:alnum:]_:-]*/)) {
@@ -256,11 +290,29 @@ panicking && /^\s*#/ {
 }
 
 
-# match: @description
+# match:  @sets
+#
+/^\s*#\s+@sets\s+/ {
+   sub(/^\s*#\s+@sets\s+/, "")
+   add_sets(shift())
+   next
+}
+
+
+# match:  @env
+#
+/^\s*#\s+@env\s+/ {
+   sub(/^\s*#\s+@env\s+/, "")
+   add_env(shift())
+   next
+}
+
+
+# match:  @description
 #
 # Will match text beginning on the same line, as well as the subsequent line.
 # Dedents text to the level of the initial line.
-match($0, /^\s*#\s+@description\s*/) {
+match($0, /^\s*#\s+@description(\s+|$)/) {
    sub(/^\s*#\s+@description\s*/, "")
    if ($1) {
       column = RLENGTH
@@ -272,7 +324,7 @@ match($0, /^\s*#\s+@description\s*/) {
 }
 
 
-# match: comment line with no text
+# match:  comment line with no text
 #
 /^\s*#\s*$/ && buffer_open {
    buffer = buffer "\n"
@@ -280,7 +332,7 @@ match($0, /^\s*#\s+@description\s*/) {
 }
 
 
-# match: regular comment text, potentially add to buffer
+# match:  regular comment text, potentially add to buffer
 #
 /^\s*#/ && buffer_open {
    if (!column) {
@@ -324,8 +376,20 @@ match($0, /^\s*#\s+@description\s*/) {
 #
 /^\s*[^#]/ || /^\s*$/ {
    if (section) add_section()
-   reset()
+   reset() ; next
 }
+
+
+## match:  variable declarations, for typedefs
+##
+#typedef && /\s*(declare|local)\s+(-(-|[gAainxr]+))\s+[[:alpha:]_]/ {
+#   sub(/\s*(declare|local)\s+(-(-|[gAainxr]+))\s+/, "")
+#   reset() ; next
+#}
+#typedef && /\s*[[:alpha:]_][[:alnum:]_]*=/ {
+#   sub(/\s*/, "")
+#   reset() ; next
+#}
 
 
 END {
