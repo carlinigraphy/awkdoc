@@ -16,7 +16,7 @@
 # - [x] @section
 # - [x] @env
 # - [x] @sets
-# - [ ] @see
+# - [x] @see
 # - [ ] @type
 # - [ ] @noargs
 # - [ ] @stdin
@@ -40,10 +40,15 @@ BEGIN {
    # Upon hitting an error, "panic" until the start of a next valid opt.
    panicking             = false
    opts["@arg"]          = true
+   opts["@env"]          = true
+   opts["@sets"]         = true
+   opts["@type"]         = true
+   opts["@section"]      = true
    opts["@description"]  = true
 
-   # "Declaring" errors[] as an array, via witchcraft.
+   # "Declaring" typedefs[] as an array, via witchcraft.
    delete errors[0]
+   delete typedefs[0]
 
    column = 0
    buffer = ""
@@ -60,11 +65,13 @@ BEGIN {
 
    # Links to format strings.
    md["toc"]     = md["h1"]
+   md["types"]   = md["h1"]
    md["body"]    = md["h1"]
    md["section"] = md["h2"]
    md["fn"]      = md["h3"]
    md["sub"]     = md["h4"]
 
+   _TYPE = ""
    _TOC  = _gensub("Contents.", md["toc"])
    _BODY = _gensub("Functions.", md["body"])
 }
@@ -72,6 +79,7 @@ BEGIN {
 
 function reset() {
    column      = 0
+   type        = true
    buffer_open = false
    buffer      = ""
    section     = ""
@@ -160,7 +168,19 @@ function link(text,   monospace, _text) {
 
 #                                 build output
 #-------------------------------------------------------------------------------
-function add_section(   s, t) {
+function add_type(name,   t) {
+   if (!_TYPE) {
+      _TYPE = _gensub("Types.", md["types"])
+   }
+
+   typedefs[name] = true
+
+   t = gensub(".*", md["li1"], 1, "`"  name  "` [_ln. "  FNR  "_]")
+   _TYPE = cat(_TYPE, t)
+}
+
+
+function add_section(   s,t) {
    s = _gensub(section, md["section"])
    if (buffer) {
       s = cat(s, buffer "\n")
@@ -170,6 +190,19 @@ function add_section(   s, t) {
 
    _BODY = cat(_BODY, s)
    _TOC  = cat(_TOC,  t)
+}
+
+
+function add_arg(name, type, desc,   arg, _type) {
+   gsub(/\|/, "\\|", desc)
+
+   _type = "`" type "`"
+   if (typedefs[type]) {
+      _type = "[" _type "](#types)"
+   }
+
+   arg = "|" name  "|"  _type  "|"  desc  "|"
+   push(fn["args"], arg)
 }
 
 
@@ -232,28 +265,6 @@ function add_fn(name,  f,t,a,_a) {
 }
 
 
-function add_arg(name, type, desc,   arg) {
-   gsub(/\|/, "\\|", desc)
-   arg = "|" name "|" type "|" desc "|"
-   push(fn["args"], arg)
-}
-
-
-function add_sets(name) {
-   push(fn["sets"], name)
-}
-
-
-function add_env(name) {
-   push(fn["env"], name)
-}
-
-
-function add_see(name) {
-   push(fn["see"], name)
-}
-
-
 #                                   matches
 #-------------------------------------------------------------------------------
 # Must always be the first match. If hit an error, skip until a synchronization
@@ -306,7 +317,7 @@ panicking && /^\s*#/ {
 #
 /^\s*#\s+@sets\s+/ {
    sub(/^\s*#\s+@sets\s+/, "")
-   add_sets(shift())
+   push(fn["sets"], shift())
 
    buffer_open = false
    next
@@ -317,7 +328,7 @@ panicking && /^\s*#/ {
 #
 /^\s*#\s+@env\s+/ {
    sub(/^\s*#\s+@env\s+/, "")
-   add_env(shift())
+   push(fn["env"], shift())
 
    buffer_open = false
    next
@@ -328,7 +339,7 @@ panicking && /^\s*#/ {
 #
 /^\s*#\s+@see\s+/ {
    sub(/^\s*#\s+@see\s+/, "")
-   add_see(shift())
+   push(fn["see"], shift())
 
    buffer_open = false
    next
@@ -347,6 +358,17 @@ match($0, /^\s*#\s+@description(\s+|$)/) {
    }
 
    buffer_open = true
+   next
+}
+
+
+# match:  @type
+#
+# Declares the following variable as a "type". Easier way of tracking down where
+# where things have been defined.
+/^\s*#\s+@type\s+/ {
+   buffer_open = false
+   type        = true
    next
 }
 
@@ -398,6 +420,21 @@ match($0, /^\s*#\s+@description(\s+|$)/) {
 }
 
 
+# match:  variable declarations, for typedefs
+#
+type && /\s*(declare|local)/ {
+   sub(/\s*(declare|local)(\s+\-(\-|[gAainxr]+))?\s*/, "")
+   add_type($1)
+   reset() ; next
+}
+type && /\s*[[:alpha:]_][[:alnum:]_]*=/ {
+   sub(/^\s*)/, "")
+   sub(/=.*$/, "")
+   add_type($1)
+   reset() ; next
+}
+
+
 # match:  non-comment text or empty lines
 #         syncs section & description
 #
@@ -405,18 +442,6 @@ match($0, /^\s*#\s+@description(\s+|$)/) {
    if (section) add_section()
    reset() ; next
 }
-
-
-## match:  variable declarations, for typedefs
-##
-#typedef && /\s*(declare|local)\s+(-(-|[gAainxr]+))\s+[[:alpha:]_]/ {
-#   sub(/\s*(declare|local)\s+(-(-|[gAainxr]+))\s+/, "")
-#   reset() ; next
-#}
-#typedef && /\s*[[:alpha:]_][[:alnum:]_]*=/ {
-#   sub(/\s*/, "")
-#   reset() ; next
-#}
 
 
 END {
@@ -428,7 +453,11 @@ END {
       exit 1
    }
 
-   _TOC = _TOC  "\n"
+   _TOC = _TOC "\n"
    print _TOC
+
+   if (_TYPE) _TYPE = _TYPE "\n"
+   print _TYPE
+
    print _BODY
 }

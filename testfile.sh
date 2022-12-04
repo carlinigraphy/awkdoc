@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# @type
+declare this
+
 # @description      (21), and
 #                   a second line of output.
 #
@@ -21,6 +24,9 @@ function foo { :; }
 # @env  HERE THERE
 #
 # @see foo
+#
+# @arg $1 :this beep boop
+# @arg $2 :that beep boop
 #
 function bar:foo { :; }
 
