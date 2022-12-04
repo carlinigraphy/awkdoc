@@ -1,39 +1,223 @@
 = AWKDoc
+:toc:                    preamble
+:toclevels:              3
+:source-highlighter:     pygments
+:pygments-style:         algol_nu
+:pygments-linenums-mode: table
+
+[WIP].
+Just kinda slamming thoughts onto the page for now.
+Needs much cleanup later.
 
 Wanted to learn AWK for some time.
-This feels like a good project for that.
+Feels like a good project for that.
+
+
+== What is it
+Generates markdown documentation from inline-comments in your .[ba]sh source files.
+
+
+== Usage
+Write bash, add comments.
+(You should be doing both of these anyway.)
+
+In comments, add <<_flags,annotation flags>>.
+
+
+=== Brief example
+```bash
+#!/usr/bin/env bash
+#---------------------------------------------------------
+# @section        Arithmetic functions
+# @description    Some uselesss functions that complicate
+#                 addition and subtraction in bash.
+#---------------------------------------------------------
+
+# @type
+declare -i RESULT=
+
+
+# @description
+#  Adds a number to the global RESULT.
+#
+# @sets  RESULT
+# @arg   :int     Number to add to the $RESULT
+function add {
+   (( RESULT = RESULT + $1 ))
+}
+
+
+# @description
+#  Subtracts a number from the global RESULT.
+#
+# @sets  RESULT
+# @arg   :int     Number to subtract from the $RESULT
+function sub {
+   (( RESULT = RESULT - $1 ))
+}
+```
+
+
+=== Generate documentation
+Run `awkdoc` on all your source files
+
+```bash
+./awkdoc *.sh > out.md
+```
+
+(Optionally) use https://github.com/jgm/pandoc[`pandoc`] to convert to .html
+
+```bash
+pandoc -s out.md -o out.html --metadata title="Documentation"
+```
+
+*Note:* the `--metadata` flag is necessary,
+as `awkdoc` does not include markdown metadata in an attempt to be more generally applicable.
+
+
+=== Environment variables
+Some behavior can be modified by environment variables.
+
+[cols="1, 1, 3"]
+|===
+| Variable | Acceptable values | Description
+
+| `AWKDOC_NO_COLOR`
+| `["", "yes"]`
+| Any non-empty value will disable color in error output
+
+| `AWKDOC_LOG_LEVEL`
+| `[-1, 0, 1, 2]`
+| Higher number, more verbose. `-1` disables error reporting entirely
+|===
+
+
+== Features
+Some things that make `awkdoc` nifty.
+
+=== Error synchronization
+Won't fail on the first error encountered.
+Collects all possible errors & info messages before printing output.
+
+=== Error messaging
+Includes the source file name, line number, _and full line itself_ in error output.
+Easier to see exactly where problems occurred without blinding digging through files.
+
+.Example
+```
+==> INFO: Unknown @-flag: asd
+    in test/testfile.sh
+    ln. 6: # @asd
+
+==> ERROR: Missing section title
+    in test/testfile.sh
+    ln. 26: # @section
+```
+
+=== Multiline descriptions
+<<_description,Description>> text is dedented, allowing for more flexible
+commenting within your code.
+
+
+== Flags
+Annotation flags must occur...
+
+. attached to a function declaration (`@arg`, `@sets`, `@env`, `@internal`)
+. attached to a variable declaration (`@type`)
+. attached to a function/section annotation (`@description`)
+. anywhere (`@section`)
+
+=== arg
+Specifies an argument, with optional type and one-line description.
+
+Types are indicated by a `:` prefix.
+An anchor to the `Types` heading is created when the type matches a declared <<_type>>
+
+.Example
+```bash
+# @arg   $1  :str  User to query
+# @arg   $2  :uri  DB uri in which to query the user
+function get_user_id { :; }
+```
+
+=== env
+Indicates the function references an environment/global variable.
+
+=== sets
+Indicates the function sets a global variable.
+
+=== see
+Creates an anchor to another declared function.
+
+=== internal
+Ignores this function definition in generated output.
+Useful for library functions you still wish to document.
+
+=== description
+May be attached to either a function definition or a sections's annotations to
+provide more information.
+
+Descriptions may be multiline, and text is dedented to the position of the first
+text-containing line after the `@description` flag.
+
+.Example
+```bash
+# @section        Utilities
+# @description    | <-- the pipe character indicates the indentation level of
+#                 the below text.
+#
+#                 This indented list is included in the description.
+#                    - one
+#                    - two
+#                    - three
+#
+# Since this comment is below the prior dedentation level, is is no longer
+# included in the description above.
+
+
+# @description
+#  | <-- the pipe character indicates the level of dedentation here.
+#
+function foo { :; }
+```
+
+=== section
+Creates a higher level heading in the TOC, and the markdown body.
+Useful for indicating the following functions are all related.
+
+=== type
+Indicates the following variable declaration is a "type".
+Adds to a list in generated output, with reference to its line number.
+Useful if later annotating a function's <<_arg,arguments>>.
+
+
+== Known limitations
+=== Annotation placement
+Comments with annotations must occur directly before function definitions.
+They may not be placed inside the function's body, or after it.
+
+.This works.
+```bash
+# @arg $1 Adds one to this number
+function add_one { echo $(( $1 + 1 )) ;}
+```
+
+.These do not.
+```bash
+# @arg $1 Adds two to this number
+
+function add_two { echo $(( $1 + 2 )) ;}
+
+
+function add_three {
+   # @arg $1 Adds three to this number
+   echo $(( $1 + 3 ))
+}
+```
 
 
 == Recognition
-Obvious inspiration, and some outright function theft, from https://github.com/reconquest/shdoc[shdoc].
+Obvious inspiration, and some outright function theft, from https://github.com/reconquest/shdoc[`shdoc`].
+I wanted to improve on a few edge cases, largely surrounding handling leading whitespace.
 
-There were a few edge cases I didn't love, largely surrounding handling leading whitespace.
-
-Doubt I'll ever reach the quality of `shdoc` (including impressive testing suite).
-Though trying my own version, and with different approach.
-
-
-== Hopeful additions
-=== Typedefs
-Rather than a freeform type hint, should support declaring locations where a type is defined in code.
-
-[source,bash]
-----
-# @typedef SOMETHING
-declare -a SOMETHING
-----
-
-May feel a little repetitive, except it's also useful for dynamic declarations.
-
-[source,bash]
-----
-# @typedef SOMETHING
-declare -a "$VAR"=
-----
-
-=== Location information
-Should tag each type & function with filename & line number.
-
-
-=== Expanded multiline support
-Ideally everything should allow for multiline descriptions.
+Use `shdoc`, it is better and more robust than `awkdoc`.

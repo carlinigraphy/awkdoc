@@ -122,7 +122,9 @@ function color(level) {
 
 
 function context(line) {
-   return sprintf("%4s|%s\n", FNR, line)
+   line = sprintf("%4sln. %s: %s\n", "", FNR, line)
+   line = sprintf("%4sin %s\n", "", FILENAME) line
+   return line 
 }
 
 
