@@ -13,9 +13,9 @@
 # Features
 # - [x] @arg
 # - [x] @description
+# - [x] @section
 # - [ ] @type
 # - [ ] @noarg
-# - [ ] @section
 # - [ ] @see
 # - [ ] @stdin
 # - [ ] @stdout
@@ -41,6 +41,12 @@
 # need to only match on text that meets the indentation level.
 #> indent = "#\s{" column -1 "}"
 #> if match($0, indent) { ... }
+#
+# Can't only do it indentation based, or a comment like this would be caught:
+#> @description
+#>   beep boop here's a line
+#> this won't be in the output
+#>   but this would!
 #
 #-------------------------------------------------------------------------------
 
@@ -73,6 +79,8 @@ BEGIN {
    md["h4"]   = "#### &"
    md["h5"]   = "##### &"
    md["link"] = "[&](#&)"
+   md["li1"]  = "- &"
+   md["li2"]  = "  - &"
 
    # Links to format strings.
    md["toc"]     = md["h1"]
@@ -81,8 +89,8 @@ BEGIN {
    md["fn"]      = md["h3"]
    md["args"]    = md["h4"]
 
-   _TOC  = ""
-   _BODY = ""
+   _TOC  = _gensub("Contents.", md["toc"])
+   _BODY = _gensub("Functions.", md["body"])
 }
 
 #                               I/O & debugging
@@ -108,11 +116,11 @@ function write(text, level) {
    print format(text, level) > "/dev/stderr"
 }
 
-
 #                              text manipulation
 #-------------------------------------------------------------------------------
-function lstrip() { sub(/^\s*/, "") }
-function rstrip() { sub(/\s*$/, "") }
+function strip()  { sub(/(^\s*|\s*$)/ , "") }
+function lstrip() { sub(/^\s*/        , "") }
+function rstrip() { sub(/\s*$/        , "") }
 
 # Pops the first word of the current line. Removes preceding whitespace before
 # and after the .pop()
@@ -123,8 +131,13 @@ function shift(   name) {
 }
 
 
-function push(key, val) {
-   key[length(key)+1] = val
+function push(arr, val,   i) {
+   for (i=0 ;; ++i) {
+      if (! arr[i]) {
+         arr[i]=val
+         break
+      }
+   }
 }
 
 
@@ -145,8 +158,11 @@ function _gensub(str, repl) {
 #                                  utilities
 #-------------------------------------------------------------------------------
 function reset() {
-   column = 0
-   buffer = ""
+   column      = 0
+   buffer_open = false
+   buffer      = ""
+   section     = ""
+
    delete fn
 }
 
@@ -159,35 +175,44 @@ function add_arg(name, type, desc,   arg) {
 }
 
 
-function add_fn(name,  _f) {
+function add_fn(name,  f, t) {
    # Function heading.
-   _f = cat(_f, _gensub(name, md["fn"]))
+   f = _gensub(name, md["fn"])
 
    # Location.
-   _f = cat(_f, "ln. "  FNR  ", in "  FILENAME  "\n")
+   f = cat(f, "[_ln. "  FNR  ", in "  FILENAME  "_]\n")
    
    # Description.
-   _f = cat(_f, buffer "\n")
+   f = cat(f, buffer "\n")
 
    # Args heading.
-   _f = cat(_f, _gensub("args", md["args"]))
+   f = cat(f, _gensub("args", md["args"]))
 
    # Args table.
-   _f = cat(_f, "|name|type|desc|")
-   _f = cat(_f, "|----|----|----|")
+   f = cat(f, "|name|type|desc|")
+   f = cat(f, "|:---|:---|:---|")
    for (a in fn["args"]) {
-      _f = cat(_f, fn["args"][a])
+      f = cat(f, fn["args"][a])
    }
-   _f = _f "\n"
+   _BODY = cat(_BODY, f "\n")
 
-   _BODY = cat(_BODY, _f)
+   t = _gensub(name, md["link"])
+   t = gensub(".*", md["li2"], 1, t)
+   _TOC  = cat(_TOC,  t)
 }
 
 
-function add_section(name,   _s) {
-   _s = cat(_s, _gensub(name, md["section"]))
-   if (buffer) _s = cat(_s, buffer "\n")
-   _BODY = cat(_BODY, _s)
+function add_section(   s, t) {
+   s = _gensub(section, md["section"])
+   if (buffer) {
+      s = cat(s, buffer "\n")
+   }
+
+   t = _gensub(section, md["link"])
+   t = gensub(".*", md["li1"], 1, t)
+
+   _BODY = cat(_BODY, s)
+   _TOC  = cat(_TOC,  t)
 }
 
 #                                   matches
@@ -207,7 +232,7 @@ panicking && /^\s*#/ {
 #
 /^\s*#\s+@section/ {
    sub(/^\s*#\s+@section\s*/, "")
-   add_section(shift())
+   section = $0
    next
 }
 
@@ -237,38 +262,49 @@ panicking && /^\s*#/ {
 # Dedents text to the level of the initial line.
 match($0, /^\s*#\s+@description\s*/) {
    sub(/^\s*#\s+@description\s*/, "")
-
    if ($1) {
       column = RLENGTH
       buffer = $0
    }
 
+   buffer_open = true
    next
 }
 
 
-# match: regular comment text
+# match: comment line with no text
 #
-# TODO: Allow for empty lines in output.
-#       Currently all lines that are just /^#/ don't show up in the output.
-/^\s*#\s+[^$]/ {
-   if (column == 0) {
+/^\s*#\s*$/ && buffer_open {
+   buffer = buffer "\n"
+   next
+}
+
+
+# match: regular comment text, potentially add to buffer
+#
+/^\s*#/ && buffer_open {
+   if (!column) {
       match($0, /^\s*#\s+/)
       column = RLENGTH
    }
 
-   # Shift off column# characters.
-   sub(".{" column "}", "")
-   buffer = cat(buffer, $0)
+   if (match($0, /^\s*#\s*/) && (column > RLENGTH)) {
+      buffer_open = false
+   } else {
+      sub(".{" column "}", "")
+      buffer = cat(buffer, $0)
+   }
 
    next
 }
 
 
-/^\s*#\s*$/ {
-   next
-}
-
+#                               synchronization
+#-------------------------------------------------------------------------------
+# Synchronization points (all non-comment text):
+#  * function declarations
+#  * variable declarations
+#  * non-comment text after a section (and description?) flag
 
 # match:  function declarations, both styles
 #
@@ -283,17 +319,25 @@ match($0, /^\s*#\s+@description\s*/) {
 }
 
 
-# match:  non-comment text, empty lines
-/^\s*[^#]/ || /^\s*$/ { reset() }
+# match:  non-comment text or empty lines
+#         syncs section & description
+#
+/^\s*[^#]/ || /^\s*$/ {
+   if (section) add_section()
+   reset()
+}
 
 
 END {
-   if (length(errors) > 0) {
+   # len(errors) is gawk-only, this is universal.
+   if (errors[0]) {
       for (idx in errors) {
          print errors[idx] > "/dev/stderr"
       }
       exit 1
    }
 
+   _TOC = _TOC  "\n"
+   print _TOC
    print _BODY
 }

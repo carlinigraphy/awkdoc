@@ -1,6 +1,9 @@
 #!/bin/bash
 
-# @section                    Something
+# @section       Something
+# @description   Here's a description
+#                and more stuff here
+#--
 
 # @description      (21), and
 #                   a second line of output.
@@ -14,10 +17,13 @@ function foo { :; }
 #  (4), and here is a description on the subsequent line, and...
 #  a second line of output.
 #
-#  Beep bap blip.
+#  BIP BIP
+#---
+#
+#  THIS SHOULD NOT BE HERE
 #
 # @arg  here     :there    Desc 1
-# @arg  this     Desc 2
+# @arg  this               Desc 2    Booooop
 bar ( )
 {
    return
