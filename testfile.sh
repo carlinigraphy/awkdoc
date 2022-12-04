@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# @type
+# @types
 declare this
 
 # @description      (21), and
@@ -13,8 +13,13 @@ declare this
 #
 function foo { :; }
 
+# @bapbap
+
 # @section Beep boop something
 # @description
+#   Here are the functions that beep
+#
+#   and also ones that boop.
 
 # @description
 #  (21), and
