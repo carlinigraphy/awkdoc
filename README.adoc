@@ -21,7 +21,7 @@ Generates markdown documentation from inline-comments in your .[ba]sh source fil
 Write bash, add comments.
 (You should be doing both of these anyway.)
 
-In comments, add <<_flags,annotation flags>>.
+In comments, add <<flags,annotation flags>>.
 
 
 === Brief example
@@ -115,7 +115,7 @@ Easier to see exactly where problems occurred without blinding digging through f
 ```
 
 === Multiline descriptions
-<<_description,Description>> text is dedented, allowing for more flexible
+<<description,Description>> text is dedented, allowing for more flexible
 commenting within your code.
 
 
@@ -131,7 +131,7 @@ Annotation flags must occur...
 Specifies an argument, with optional type and one-line description.
 
 Types are indicated by a `:` prefix.
-An anchor to the `Types` heading is created when the type matches a declared <<_type,type>>
+An anchor to the `Types` heading is created when the type matches a declared <<type>>
 
 .Example
 ```bash
@@ -188,7 +188,7 @@ Useful for indicating the following functions are all related.
 === type
 Indicates the following variable declaration is a "type".
 Adds to a list in generated output, with reference to its line number.
-Useful if later annotating a function's <<_arg,arguments>>.
+Useful if later annotating a function's <<arg,arguments>>.
 
 
 == Known limitations
