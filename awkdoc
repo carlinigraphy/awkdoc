@@ -142,6 +142,22 @@ function _gensub(str, repl) {
 }
 
 
+function link(text,   monospace, _text) {
+   _text = text
+
+   text = tolower(text)
+   gsub(/[^[:alnum:][:space:]_]/, "", text)
+   gsub(/\s/, "-", text)
+
+   if (monospace) {
+      _text = "`" _text "`"
+   }
+
+   text = "[" _text "](#" text ")"
+   return text
+}
+
+
 #                                 build output
 #-------------------------------------------------------------------------------
 function add_section(   s, t) {
@@ -150,8 +166,7 @@ function add_section(   s, t) {
       s = cat(s, buffer "\n")
    }
 
-   t = _gensub(section, md["link"])
-   t = gensub(".*", md["li1"], 1, t)
+   t = gensub(".*", md["li1"], 1, link(section))
 
    _BODY = cat(_BODY, s)
    _TOC  = cat(_TOC,  t)
@@ -203,16 +218,14 @@ function add_fn(name,  f,t,a,_a) {
    if (fn["see"][0]) {
       f = cat(f "\n", _gensub("see", md["sub"]))
       for (a in fn["see"]) {
-         _a = fn["see"][a]
-         _a = gensub(".*", md["link"], 1, _a)
+         _a = link(fn["see"][a], "monospace")
          _a = gensub(".*", md["li1"],  1, _a)
          f = cat(f, _a)
       }
    }
 
    # Append to TOC.
-   t = _gensub(name, md["link"])
-   t = gensub(".*", md["li2"], 1, t)
+   t = gensub(".*", md["li2"], 1, link(name, "monospace"))
 
    _TOC  = cat(_TOC,  t)
    _BODY = cat(_BODY, f "\n")
