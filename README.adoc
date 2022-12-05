@@ -5,12 +5,7 @@
 :pygments-style:         algol_nu
 :pygments-linenums-mode: table
 
-Wanted to learn AWK for some time.
-Feels like a good project for that.
-
-
-== What is it
-Generates markdown documentation from inline-comments in your .[ba]sh source files.
+Generates markdown documentation from comment annotations in [ba]sh source files.
 
 
 == Usage
@@ -95,7 +90,7 @@ Subtracts a number from the global RESULT.
 
 
 === Generate documentation
-Run `awkdoc` on all your source files
+Run `awkdoc`.
 
 ```bash
 ./awkdoc *.sh > out.md
@@ -157,6 +152,7 @@ Easier to see where problems occurred.
 Generates a list of variables specified by <<env,@env>> or <<set,@set>>, with sub-items for the function that set them.
 Useful when debugging, or reasoning about the whole program.
 
+.Example
 ```markdown
 # Variables referenced.
 - `LOCATION`
@@ -212,6 +208,21 @@ An anchor to the `Types` heading is created when the parameter type matches a <<
 function location:copy {
 ```
 
+.Output
+```markdown
+### location:copy()
+(*ln. 8, in input.sh*)
+
+Copies the properties from $1's location node to $2's. If no properties are
+specified, copies all of them. May only operate on TOKENs and NODEs.
+
+#### args
+|name|type|desc|
+|:---|:---|:---|
+|`$1`|`NODE`|Source location-containing node|
+|`$2`|`NODE`|Destination location-containing node|
+```
+
 === env
 Indicates the function references an environment/global variable.
 
@@ -228,6 +239,26 @@ Indicates the function references an environment/global variable.
 #
 # @noargs
 function location:cursor {
+```
+
+.Output
+```markdown
+# Variables referenced.
+- `CURSOR`
+  - [`location:cursor`](#locationcursor)
+- `FILE_IDX`
+  - [`location:cursor`](#locationcursor)
+
+# Functions.
+### location:cursor()
+(*ln. 11, in input.sh*)
+
+Convenience function to create a location at the current cursor's position.
+Cleans up otherwise messy and repetitive code in the lexer.
+
+#### uses
+- `FILE_IDX`
+- `CURSOR`
 ```
 
 === set
@@ -247,6 +278,32 @@ Indicates the function sets a global variable.
 function utils:add_file {
 ```
 
+.Output
+```markdown
+# Variables set.
+- `FILE_IDX`
+  - [`utils:add_file`](#utilsadd_file)
+- `FILES[]`
+  - [`utils:add_file`](#utilsadd_file)
+
+# Functions.
+### utils:add_file()
+(*ln. 10, in input.sh*)
+
+Throws error on circular imports, resolves relative paths to fully qualified
+path.
+
+#### args
+|name|type|desc|
+|:---|:---|:---|
+|`$1`|`str`|Relative or absolute path to config file|
+|`$2`|`LOCATION`|[Optional] For error reporting import statements|
+
+#### set
+- `FILES[]`
+- `FILE_IDX`
+```
+
 === see
 Creates an anchor to another declared function.
 
@@ -259,6 +316,22 @@ Creates an anchor to another declared function.
 # @see   utils:parse
 # @arg   $1    :NODE     Root AST node for a file
 function imports:parse {
+```
+
+.Output
+```markdown
+### imports:parse()
+(*ln. 7, in input.sh*)
+
+Identifies and calls `utils:parse` on all import statements.
+
+#### args
+|name|type|desc|
+|:---|:---|:---|
+|`$1`|`NODE`|Root AST node for a file|
+
+#### see
+- [`utils:parse`](#utilsparse)
 ```
 
 === internal
@@ -307,6 +380,18 @@ Useful for indicating the following functions are all related.
 #-------------------------------------------------------------------------------
 ```
 
+.Output
+```markdown
+# Contents.
+- [Utils](#utils)
+
+# Functions.
+## Utils
+All of the utilities that tie together functionality from the lexer, parser,
+and compiler. Allows re-entering the parser for each included file, and
+concatenating (not literally, but in spirt) imported files.
+```
+
 The same dedentation rules apply as in the <<description>>.
 
 === type
@@ -317,10 +402,43 @@ Useful if later annotating a function's <<arg,arguments>>.
 .Example
 ```bash
 # @type
-declare -g NODE
+declare -g LOCATION=
 
-# @type
-declare -g TOKEN
+# utils:add_file()
+# @description
+#  Throws error on circular imports, resolves relative paths to fully qualified
+#  path.
+#
+# @set   FILES[]
+# @set   FILE_IDX
+# @arg   $1    :str        Relative or absolute path to config file
+# @arg   $2    :LOCATION   [Optional] For error reporting import statements
+function utils:add_file {
+```
+
+.Output
+```markdown
+# Types.
+|type|line|file|
+|:---|:---|:---|
+|`LOCATION`|`2`|*input.sh*|
+
+# Functions.
+### utils:add_file()
+(*ln. 13, in input.sh*)
+
+Throws error on circular imports, resolves relative paths to fully qualified
+path.
+
+#### args
+|name|type|desc|
+|:---|:---|:---|
+|`$1`|`str`|Relative or absolute path to config file|
+|`$2`|[`LOCATION`](#types)|[Optional] For error reporting import statements|
+
+#### set
+- `FILES[]`
+- `FILE_IDX`
 ```
 
 
@@ -373,8 +491,8 @@ declare -g IP_ADDRESS
 
 One will need to change the structure of their .sh files, or the order the files
 are sourced, so type declarations always preceed their use.
-Or don't, and some links may not exist.
 
+Or don't, and some links may not exist.
 It's not a big deal.
 
 
