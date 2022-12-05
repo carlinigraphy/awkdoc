@@ -223,6 +223,31 @@ function add_three {
 It is currently possible to have an ambiguous anchor reference.
 I don't know of a way to make markdown anchors more specific.
 
+=== Links to typedefs
+Source files are parsed linearly.
+If there is a defined <<type,typedef>> for a function's <<arg,argument>> type, an anchor is created.
+
+If the typedef is declared *after* the function, there is no link.
+There is no backtracking.
+
+.Example
+No link will be created for the function's 1st parameter type, as it's declared
+after the function itself.
+
+```bash
+# @arg   $1    :IP_ADDRESS
+function ping_ip_addr { :; }
+
+# @type
+declare -g IP_ADDRESS
+```
+
+One will need to change the structure of their .sh files, or the order the files
+are sourced, so type declarations always preceed their use.
+Or don't, and some links may not exist.
+
+It's not a big deal.
+
 
 == Recognition
 Obvious inspiration, and some outright function theft, from https://github.com/reconquest/shdoc[`shdoc`].
