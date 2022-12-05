@@ -52,7 +52,7 @@ function sub {
 ```
 
 out.md
-```md
+```markdown
 # Contents.
 - [Arithmetic functions](#arithmetic-functions)
   - [`add`](#add)
@@ -157,9 +157,7 @@ Easier to see where problems occurred.
 Generates a list of variables specified by <<env,@env>> or <<set,@set>>, with sub-items for the function that set them.
 Useful when debugging, or reasoning about the whole program.
 
-A real example from [@hre-utils/conflang](https://github.com/hre-utils/conflang):
-
-```md
+```markdown
 # Variables referenced.
 - `LOCATION`
   - [`token:new`](#tokennew)
@@ -170,9 +168,6 @@ A real example from [@hre-utils/conflang](https://github.com/hre-utils/conflang)
   - [`parser:declaration`](#parserdeclaration)
   - [`parser:typedef`](#parsertypedef)
   - [`parser:type`](#parsertype)
-  - [`parser:decl_section`](#parserdecl_section)
-  - [`parser:decl_variable`](#parserdecl_variable)
-  - [`parser:import`](#parserimport)
 
 # Variables set.
 - `LOCATION`
@@ -185,12 +180,6 @@ A real example from [@hre-utils/conflang](https://github.com/hre-utils/conflang)
   - [`parser:declaration`](#parserdeclaration)
   - [`parser:program`](#parserprogram)
   - [`parser:typedef`](#parsertypedef)
-  - [`parser:type`](#parsertype)
-  - [`parser:container`](#parsercontainer)
-  - [`parser:decl_section`](#parserdecl_section)
-  - [`parser:decl_variable`](#parserdecl_variable)
-  - [`parser:import`](#parserimport)
-  - [`parser:header`](#parserheader)
 ```
 
 
@@ -202,14 +191,14 @@ Annotation flags must occur...
 . attached to a function/section annotation (`@description`)
 . anywhere (`@section`)
 
-Instead of more meaningless exapmles, all the snippets below come from [@hre-utils/conflang](https://github.com/hre-utils/conflang).
+Instead of more meaningless exapmles, all the snippets below come from https://github.com/hre-utils/conflang[@hre-utils/conflang].
 It helps me to see a real-life usecase.
 
 === arg
 Specifies an argument, with optional type and one-line description.
 
 Types are indicated by a `:` prefix.
-An anchor to the `Types` heading is created when the type matches a declared <<type>>
+An anchor to the `Types` heading is created when the parameter type matches a <<type,typedef>>.
 
 .Example
 ```bash
