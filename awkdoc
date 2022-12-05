@@ -19,16 +19,7 @@
 # - [x] @see
 # - [x] @type
 # - [x] @internal
-# - [ ] @noargs
-# - [ ] @stdin
-# - [ ] @stdout
-# - [ ] @stderr
-#
-#-------------------------------------------------------------------------------
-# TODO
-# - [x] Don't clear @type on regular comment text, allows for more flexibility
-# - [ ] Throw error if @type is used in a function?
-# - [ ] Throw error if @section is used in a function?
+# - [x] @noargs
 #
 #-------------------------------------------------------------------------------
 
@@ -130,7 +121,8 @@ function context(line) {
 }
 
 
-function log_error(line, text, level) {
+function log_error(line, text,   level) {
+   level = "ERROR"
    text  = "==> " color(level) ": " text
    text  = text "\n" context(line)
 
@@ -161,6 +153,11 @@ function section_in_function(line,   msg) {
    msg = "Cannot attach @section to this function. Did you intend to add a line"
    msg = msg sprintf("\n%10sbreak after the section flag?", "")
    write(line, msg, "INFO")
+}
+
+
+function noargs_args_mismatch(line,  msg) {
+   log_error(line, "@noargs and @arg flags are mutually exclusive.")
 }
 
 
@@ -274,11 +271,18 @@ function add_arg(name, type, desc,   arg, _type) {
 
 
 function add_fn(name, line,   f,t,a,_a) {
+   # Internal or no annotations, nothing to do.
    if (empty(fn))      return
    if (fn["internal"]) return
 
-   if (typedef)   typedef_in_function(line)
-   if (section)   section_in_function(line)
+   # INFO if @type or @section attached to a function.
+   if (typedef) typedef_in_function(line)
+   if (section) section_in_function(line)
+
+   # ERROR if both @noargs and @arg
+   if (fn["noargs"] && !empty(fn["args"])) {
+      noargs_args_mismatch(line)
+   }
 
    # Function heading/location.
    f = _gensub(name, md["fn"]) "()"
@@ -468,6 +472,16 @@ panicking && /^\s*#/ {
 # Do not include this function, or its docs, in the generated output.
 /^\s*#\s+@internal(\s+|$)/ {
    fn["internal"] = true
+   next
+}
+
+
+# match:  @noargs
+#
+# Doesn't actually impact the output, just use for error reporting if an @arg
+# is additionally passed.
+/^\s*#\s+@noargs(\s+|$)/ {
+   fn["noargs"] = true
    next
 }
 
