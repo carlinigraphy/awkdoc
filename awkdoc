@@ -15,7 +15,7 @@
 # - [x] @description
 # - [x] @section
 # - [x] @env
-# - [x] @sets
+# - [x] @set
 # - [x] @see
 # - [x] @type
 # - [x] @internal
@@ -23,6 +23,12 @@
 # - [ ] @stdin
 # - [ ] @stdout
 # - [ ] @stderr
+#
+#-------------------------------------------------------------------------------
+# TODO
+# - [x] Don't clear @type on regular comment text, allows for more flexibility
+# - [ ] Throw error if @type is used in a function?
+# - [ ] Throw error if @section is used in a function?
 #
 #-------------------------------------------------------------------------------
 
@@ -38,19 +44,19 @@ BEGIN {
    true  = 1
 
    # Upon hitting an error, "panic" until the start of a next valid opt.
-   panicking             = false
-   opts["@arg"]          = true
-   opts["@env"]          = true
-   opts["@sets"]         = true
-   opts["@type"]         = true
-   opts["@section"]      = true
-   opts["@description"]  = true
+   panicking            = false
+   opts["@arg"]         = true
+   opts["@env"]         = true
+   opts["@set"]         = true
+   opts["@type"]        = true
+   opts["@section"]     = true
+   opts["@description"] = true
 
    # "Declaring" as an array, via witchcraft.
    delete _ERRORS[0]
    delete _TYPEDEFS[0]
    delete _ENV[0]
-   delete _SETS[0]
+   delete _SET[0]
 
    column = 0
    buffer = ""
@@ -84,7 +90,6 @@ function reset() {
    buffer_open = false
    buffer      = ""
    section     = ""
-   type        = false
 
    delete fn
 }
@@ -144,6 +149,18 @@ function write(line, text, level) {
    if (significant(level)) {
       print text > "/dev/stderr"
    }
+}
+
+
+function typedef_in_function(line,   msg) {
+   write(line, "Cannot attach @type flag to this function.", "INFO")
+}
+
+
+function section_in_function(line,   msg) {
+   msg = "Cannot attach @section to this function. Did you intend to add a line"
+   msg = msg sprintf("\n%10sbreak after the section flag?", "")
+   write(line, msg, "INFO")
 }
 
 
@@ -211,15 +228,19 @@ function link(text,   monospace, _text) {
 
 #                                 build output
 #-------------------------------------------------------------------------------
-function add_type(name,   t) {
+function add_type(name,   t,l,f) {
    if (!_TYPE) {
       _TYPE = _gensub("Types.", md["types"])
+      _TYPE = cat(_TYPE, "|type|line|file|")
+      _TYPE = cat(_TYPE, "|:---|:---|:---|")
    }
 
    _TYPEDEFS[name] = true
 
-   t = gensub(".*", md["li1"], 1, "`"  name  "` (*"  FILENAME  " :"  FNR  "*)")
-   _TYPE = cat(_TYPE, t)
+   t = "`" name     "`"
+   l = "`" FNR      "`"
+   f = "*" FILENAME "*"
+   _TYPE = cat(_TYPE, "|" t "|" l "|" f "|" )
 }
 
 
@@ -247,14 +268,17 @@ function add_arg(name, type, desc,   arg, _type) {
       _type = "[" _type "](#types)"
    }
 
-   arg = "|" name  "|"  _type  "|"  desc  "|"
+   arg = "|`" name  "`|"  _type  "|"  desc  "|"
    push(fn["args"], arg)
 }
 
 
-function add_fn(name,  f,t,a,_a) {
+function add_fn(name, line,   f,t,a,_a) {
    if (empty(fn))      return
    if (fn["internal"]) return
+
+   if (typedef)   typedef_in_function(line)
+   if (section)   section_in_function(line)
 
    # Function heading/location.
    f = _gensub(name, md["fn"]) "()"
@@ -277,10 +301,10 @@ function add_fn(name,  f,t,a,_a) {
    }
 
    # Sets global variables.
-   if (fn["sets"][0]) {
-      f = cat(f "\n", _gensub("sets", md["sub"]))
-      for (a in fn["sets"]) {
-         _a = fn["sets"][a]
+   if (fn["set"][0]) {
+      f = cat(f "\n", _gensub("set", md["sub"]))
+      for (a in fn["set"]) {
+         _a = fn["set"][a]
          _SETS[_a][name] = true
 
          _a = _gensub("`" _a "`", md["li1"])
@@ -333,12 +357,12 @@ function build_env(   out,v,fn) {
 }
 
 
-function build_sets(   out,v,fn) {
+function build_set(   out,v,fn) {
    out = _gensub("Variables set.", md["h1"])
 
-   for (v in _SETS) {
+   for (v in _SET) {
       out = cat(out, gensub(".*", md["li1"], 1, "`" v "`"))
-      for (fn in _SETS[v]) {
+      for (fn in _SET[v]) {
          fn  = link(fn, "monospace")
          out = cat(out, gensub(".*", md["li2"], 1, fn))
       }
@@ -358,6 +382,15 @@ panicking && /^\s*#/ {
       next
    }
 }
+
+
+# match:  non-comment text or empty lines
+#
+# More flexibility when declaring a type. May put the `@type` flag at the top of
+# a comment block, raerpb directly before the declaration.
+#/^\s*[^#]/ || /^\s*$/ {
+#   typedef = false
+#}
 
 
 # match:  @section
@@ -397,11 +430,11 @@ panicking && /^\s*#/ {
 }
 
 
-# match:  @sets
+# match:  @set
 #
-/^\s*#\s+@sets\s+/ {
-   sub(/^\s*#\s+@sets\s+/, "")
-   push(fn["sets"], shift())
+/^\s*#\s+@set\s+/ {
+   sub(/^\s*#\s+@set\s+/, "")
+   push(fn["set"], shift())
 
    buffer_open = false
    next
@@ -461,7 +494,7 @@ match($0, /^\s*#\s+@description(\s+|$)/) {
 # where things have been defined.
 /^\s*#\s+@type(\s+|$)/ {
    buffer_open = false
-   type        = true
+   typedef     = true
    next
 }
 
@@ -513,28 +546,27 @@ match($0, /^\s*#\s+@description(\s+|$)/) {
 #
 /^\s*function\s+[[:alpha:]_][[:alnum:]_:-]*/ ||
 /^\s*[[:alpha:]_][[:alnum:]_:-]*\s*\(\s*\)/ {
+   line = $0
+
    sub(/^\s*function/, "")
    sub(/\s*/, "")
    sub(/\(.*)/, "")
 
-   add_fn($1)
+   add_fn($1, line)
    reset() ; next
 }
 
 
 # match:  variable declarations, for typedefs
 #
-type && /\s*(declare|local)/ {
-   sub(/\s*(declare|local)(\s+\-(\-|[gAainxr]+))?\s*/, "")
-   sub(/=.*/, "")
-   add_type($1)
-   reset() ; next
-}
-type && /\s*[[:alpha:]_][[:alnum:]_]*=/ {
+typedef && (/^\s*(declare|local)/ || /\s*[[:alpha:]_][[:alnum:]_]*=/) {
    sub(/^\s*)/, "")
-   sub(/=.*$/, "")
+   sub(/^\s*(declare|local)(\s+\-(\-|[gAainxr]+))?\s*/, "")
+   sub(/=.*/, "")
 
    add_type($1)
+   typedef = false
+
    reset() ; next
 }
 
@@ -543,6 +575,7 @@ type && /\s*[[:alpha:]_][[:alnum:]_]*=/ {
 #         syncs section & description
 #
 /^\s*[^#]/ || /^\s*$/ {
+   typedef = false
    if (section) add_section()
    reset() ; next
 }
@@ -562,8 +595,8 @@ END {
    if (_TYPE) _TYPE = _TYPE "\n"
    print _TYPE
 
-   if (!empty(_ENV))  print build_env()
-   if (!empty(_SETS)) print build_sets()
+   if (!empty(_ENV)) print build_env()
+   if (!empty(_SET)) print build_set()
 
    print _BODY
    print "<br/><br/>\n:: *generated by @hre-utils/awkdoc* ::"
