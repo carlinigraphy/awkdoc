@@ -309,7 +309,7 @@ function add_fn(name, line,   f,t,a,_a) {
       f = cat(f "\n", _gensub("set", md["sub"]))
       for (a in fn["set"]) {
          _a = fn["set"][a]
-         _SETS[_a][name] = true
+         _SET[_a][name] = true
 
          _a = _gensub("`" _a "`", md["li1"])
          f = cat(f, _a)
@@ -417,8 +417,15 @@ panicking && /^\s*#/ {
 # match:  @arg
 #
 /^\s*#\s+@arg\s+/ {
+   line = $0
+
    sub(/^\s*#\s+@arg\s+/, "")
    name = shift()
+
+   if (!name) {
+      log_error(line, "Missing argument name")
+      next
+   }
 
    if (match($1, /^:[[:alpha:]_][[:alnum:]_:-]*/)) {
       sub(/^:/, "")
