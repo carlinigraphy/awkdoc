@@ -388,15 +388,6 @@ panicking && /^\s*#/ {
 }
 
 
-# match:  non-comment text or empty lines
-#
-# More flexibility when declaring a type. May put the `@type` flag at the top of
-# a comment block, raerpb directly before the declaration.
-#/^\s*[^#]/ || /^\s*$/ {
-#   typedef = false
-#}
-
-
 # match:  @section
 #
 /^\s*#\s+@section(\s*|$)/ {
@@ -595,9 +586,9 @@ typedef && (/^\s*(declare|local)/ || /\s*[[:alpha:]_][[:alnum:]_]*=/) {
 # match:  non-comment text or empty lines
 #         syncs section & description
 #
-/^\s*[^#]/ || /^\s*$/ {
-   typedef = false
+!/^\s*#/ || /^\s*$/ {
    if (section) add_section()
+   typedef = false
    reset() ; next
 }
 
@@ -610,10 +601,9 @@ END {
       exit 1
    }
 
-   _TOC = _TOC "\n"
    print _TOC
 
-   if (_TYPE) _TYPE = _TYPE "\n"
+   if (_TYPE) _TYPE = "\n" _TYPE "\n"
    print _TYPE
 
    if (!empty(_ENV)) print build_env()
