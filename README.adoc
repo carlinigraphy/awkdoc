@@ -215,6 +215,10 @@ function add_three {
 }
 ```
 
+=== Markdown anchors
+It is currently possible to have an ambiguous anchor reference.
+I don't know of a way to make markdown anchors more specific.
+
 
 == Recognition
 Obvious inspiration, and some outright function theft, from https://github.com/reconquest/shdoc[`shdoc`].
