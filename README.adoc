@@ -118,6 +118,10 @@ Easier to see exactly where problems occurred without blinding digging through f
 <<description,Description>> text is dedented, allowing for more flexible
 commenting within your code.
 
+=== Variables set/used
+If <<env,@env>> or <<sets,@sets>> flags are given, generates a list of every variable that is set, and by which function.
+Useful when debugging, or trying to reason about the whole program.
+
 
 == Flags
 Annotation flags must occur...
