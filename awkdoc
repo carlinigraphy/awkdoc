@@ -18,6 +18,7 @@ BEGIN {
    opts["@env"]         = true
    opts["@set"]         = true
    opts["@type"]        = true
+   opts["@noargs"]      = true
    opts["@section"]     = true
    opts["@description"] = true
 
@@ -37,7 +38,7 @@ BEGIN {
    md["h4"]   = "#### &"
    md["h5"]   = "##### &"
    md["link"] = "[`&`](#&)"
-   md["li1"]  = "- &"_a 
+   md["li1"]  = "- &"
    md["li2"]  = "  - &"
 
    # Links to format strings.
