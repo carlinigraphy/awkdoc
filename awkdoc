@@ -370,7 +370,7 @@ function add_arg(name, type, desc,   arg, _type) {
    }
 
    if (_TYPEDEFS[type]) {
-      _type = "[" _type "](#types)"
+      _type = "[" _type "](#types.)"
    }
 
    arg = "|`" name  "`|"  _type  "|"  desc  "|"
