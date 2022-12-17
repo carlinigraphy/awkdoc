@@ -18,7 +18,7 @@ Run `awkdoc` to turn annotations -> markdown documentation.
 #!/usr/bin/env bash
 #---------------------------------------------------------
 # @section        Arithmetic functions
-# @description    Some uselesss functions that complicate
+# @description    Some useless functions that complicate
 #                 addition and subtraction in bash.
 #---------------------------------------------------------
 
@@ -60,7 +60,7 @@ out.md
 
 # Functions.
 ## Arithmetic functions
-Some uselesss functions that complicate
+Some useless functions that complicate
 addition and subtraction in bash.
 
 ### add()
@@ -126,6 +126,10 @@ Some behavior can be modified by environment variables.
 == Features
 Things that make `awkdoc` nifty.
 
+> *NOTE:* Instead of random examples, all the snippets below come from https://github.com/hre-utils/conflang[@hre-utils/conflang].
+Helps me to understand when looking at real life use cases.
+
+
 === Error synchronization
 Won't fail on the first error encountered.
 Collects all possible errors & info messages before printing output.
@@ -146,7 +150,7 @@ Easier to see where problems occurred.
 ```
 
 === Multiline descriptions
-<<description,Description>> text is dedented, allowing for more flexible comment styles.
+<<description,Description>> text is dedented to the level of the first line, allowing for more flexible comment styles.
 
 === Variables set/used
 Generates a list of variables specified by <<env,@env>> or <<set,@set>>, with sub-items for the function that set them.
@@ -186,9 +190,6 @@ Annotation flags must occur...
 . attached to a variable declaration (`@type`)
 . attached to a function/section annotation (`@description`)
 . anywhere (`@section`)
-
-Instead of more meaningless exapmles, all the snippets below come from https://github.com/hre-utils/conflang[@hre-utils/conflang].
-It helps me to see a real-life usecase.
 
 === arg
 Specifies an argument, with optional type and one-line description.
@@ -376,7 +377,7 @@ Useful for indicating the following functions are all related.
 # @description
 #  All of the utilities that tie together functionality from the lexer, parser,
 #  and compiler. Allows re-entering the parser for each included file, and
-#  concatenating (not literally, but in spirt) imported files.
+#  concatenating (not literally, but in spirit) imported files.
 #-------------------------------------------------------------------------------
 ```
 
@@ -389,7 +390,7 @@ Useful for indicating the following functions are all related.
 ## Utils
 All of the utilities that tie together functionality from the lexer, parser,
 and compiler. Allows re-entering the parser for each included file, and
-concatenating (not literally, but in spirt) imported files.
+concatenating (not literally, but in spirit) imported files.
 ```
 
 The same dedentation rules apply as in the <<description>>.
@@ -490,7 +491,7 @@ declare -g IP_ADDRESS
 ```
 
 One will need to change the structure of their .sh files, or the order the files
-are sourced, so type declarations always preceed their use.
+are sourced, so type declarations always precede their use.
 
 Or don't, and some links may not exist.
 It's not a big deal.
