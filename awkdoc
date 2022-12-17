@@ -236,6 +236,7 @@ function push(arr, val,   i) {
          break
       }
    }
+   return arr
 }
 
 
