@@ -199,7 +199,6 @@ An anchor to the `Types` heading is created when the parameter type matches a <<
 
 .Example
 ```bash
-# location:copy()
 # @description
 #  Copies the properties from $1's location node to $2's. If no properties are
 #  specified, copies all of them. May only operate on TOKENs and NODEs.
@@ -229,7 +228,6 @@ Indicates the function references an environment/global variable.
 
 .Example
 ```bash
-# location:cursor()
 # @description
 #  Convenience function to create a location at the current cursor's position.
 #  Cleans up otherwise messy and repetitive code in the lexer.
@@ -267,7 +265,6 @@ Indicates the function sets a global variable.
 
 .Example
 ```bash
-# utils:add_file()
 # @description
 #  Throws error on circular imports, resolves relative paths to fully qualified
 #  path.
@@ -310,7 +307,6 @@ Creates an anchor to another declared function.
 
 .Example
 ```bash
-# imports:parse()
 # @description
 #  Identifies and calls `utils:parse` on all import statements.
 #
@@ -341,7 +337,6 @@ Useful for library functions you still wish to document.
 
 .Example
 ```bash
-# parser:_advance()
 # @internal
 # @description
 #  Holdover until I wire up synchronization function. Called by parser:advance()
@@ -405,7 +400,6 @@ Useful if later annotating a function's <<arg,arguments>>.
 # @type
 declare -g LOCATION=
 
-# utils:add_file()
 # @description
 #  Throws error on circular imports, resolves relative paths to fully qualified
 #  path.
